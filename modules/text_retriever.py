@@ -306,6 +306,13 @@ class TextMatchRetriever:
                 nq.cleaned, self.catalog_40, self._word_index_40, top_k
             )
             results_40 = self._merge(results_40_orig, results_40_clean, top_k)
+
+            # Also search compound split/join variants for consistency
+            for variant in nq.search_variants:
+                v302 = self._text_search(variant, self.catalog_302, self._word_index_302, top_k)
+                v40 = self._text_search(variant, self.catalog_40, self._word_index_40, top_k)
+                results_302 = self._merge(results_302, v302, top_k)
+                results_40 = self._merge(results_40, v40, top_k)
         else:
             nq = NormalizedQuery(original=food_description, cleaned=food_description)
             results_302 = self._text_search(

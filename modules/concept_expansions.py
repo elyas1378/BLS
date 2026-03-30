@@ -244,4 +244,17 @@ CONCEPT_EXPANSION = {
     "zucker": ["zucker haushaltszucker"],
     "zwiebel": ["gemüsezwiebel roh"],
     "zwiebeln": ["gemüsezwiebel roh"],
+    # Brands → generic BLS search terms
+    "snickers": ["schokolade gefüllt", "milchschokolade nougat", "schokolade gefüllt mit nüssen"],
+    "mars": ["schokolade gefüllt", "milchschokolade nougat", "schokolade gefüllt mit karamell"],
+    "twix": ["schokolade gefüllt", "milchschokolade gefüllt mit karamell", "keks schokolade"],
+    "milka": ["schokolade vollmilch", "schokolade"],
+    "oreo": ["keks sandwich", "keks butterkeks"],
+    "pringles": ["kartoffelchips", "chips kartoffel"],
+    "froop": ["fruchtjoghurt", "joghurt frucht"],
+    "gruyère": ["hartkäse", "käse hart"],
+    "gruyere": ["hartkäse", "käse hart"],
+    "pepsi": ["colagetränke", "colagetränke kalorienarm"],
+    "red bull": ["energydrink", "energy drink koffeinhaltig"],
+    "fanta": ["limonade orange", "orangenlimonade"],
 }

@@ -352,6 +352,16 @@ BRAND_MAP: dict[str, str] = {
     "sprite":        "limonade zitrone",
     "schweppes":     "limonade tonic",
     "red bull":      "energydrink",
+    "snickers":      "schokoriegel",
+    "mars":          "schokoriegel",
+    "twix":          "schokoriegel",
+    "milka":         "schokolade vollmilch",
+    "oreo":          "keks sandwich",
+    "pringles":      "kartoffelchips",
+    "magnum":        "milchspeiseeis",
+    "froop":         "fruchtjoghurt",
+    "gruyère":       "hartkäse",
+    "gruyere":       "hartkäse",
     "rewe":          "",      # store brand — ignore
     "aldi":          "",
     "lidl":          "",
@@ -447,8 +457,9 @@ def normalize(text: str) -> NormalizedQuery:
         return result
 
     # 1. Extract fat percentage BEFORE lowercasing (preserve original)
+    #    But skip if this is an alcoholic/beverage context (% = alcohol, not fat)
     fat_match = FAT_PATTERN.search(working)
-    if fat_match:
+    if fat_match and not _is_beverage_context(working):
         result.fat_percent = fat_match.group(1).replace(",", ".")
 
     # 2. Lowercase
@@ -518,6 +529,72 @@ def normalize(text: str) -> NormalizedQuery:
 #  Helper functions
 # =====================================================================
 
+_BEVERAGE_KEYWORDS = {
+    "bier", "wein", "sekt", "prosecco", "wodka", "vodka", "gin", "rum",
+    "likör", "radler", "glühwein", "aperol", "hugo", "whisky", "cognac",
+    "schnaps", "grappa", "absinth", "champagner", "cider", "met",
+    "weißwein", "rotwein", "rosé", "rose", "weinschorle",
+}
+
+
+def _is_beverage_context(text: str) -> bool:
+    """Return True if the text describes an alcoholic beverage (% = ABV, not fat)."""
+    lower = text.lower()
+    return any(kw in lower for kw in _BEVERAGE_KEYWORDS)
+
+
+# Common German food word stems for compound splitting/joining
+_COMPOUND_PARTS = [
+    "kürbis", "tomaten", "tomate", "kartoffel", "apfel", "nuss", "nuß",
+    "schinken", "käse", "zwiebel", "knoblauch", "karotten", "möhren",
+    "spinat", "brokkoli", "broccoli", "hähnchen", "hühner", "rinds",
+    "rinder", "schweine", "lachs", "thunfisch", "gurken", "paprika",
+    "pilz", "champignon", "zitronen", "zitrone", "orangen", "erdbeer",
+    "himbeer", "heidel", "blau", "johannis", "kirsch", "birnen",
+    "pflaume", "mais", "reis", "hafer", "dinkel", "roggen", "weizen",
+    "vollkorn", "milch", "sahne", "quark", "joghurt", "butter",
+    "kokos", "mandel", "walnuss", "cashew", "erdnuss", "sesam",
+    "sonnenblumen", "oliven", "pesto", "soße", "sauce", "suppe",
+    "salat", "brot", "kuchen", "creme", "mus", "saft",
+]
+# Sort longest first so "sonnenblumen" matches before "blumen"
+_COMPOUND_PARTS.sort(key=len, reverse=True)
+
+
+def _compound_split(word: str) -> str | None:
+    """
+    Try splitting a compound German word at food-word boundaries.
+    Returns space-separated version if a split is found, else None.
+    E.g., "kürbispesto" → "kürbis pesto"
+    """
+    lower = word.lower()
+    if " " in lower or len(lower) < 6:
+        return None
+    for part in _COMPOUND_PARTS:
+        if lower.startswith(part) and len(lower) > len(part) + 2:
+            remainder = lower[len(part):]
+            return f"{part} {remainder}"
+        if lower.endswith(part) and len(lower) > len(part) + 2:
+            prefix = lower[: len(lower) - len(part)]
+            return f"{prefix} {part}"
+    return None
+
+
+def _compound_join(text: str) -> str | None:
+    """
+    Try joining space-separated words into a German compound.
+    Returns joined version if the parts look like food compounds, else None.
+    E.g., "kürbis pesto" → "kürbispesto"
+    """
+    words = text.lower().split()
+    if len(words) != 2:
+        return None
+    for part in _COMPOUND_PARTS:
+        if words[0] == part or words[1] == part:
+            return "".join(words)
+    return None
+
+
 def _has_german_chars(text: str) -> bool:
     """Check for German-specific characters (ä, ö, ü, ß)."""
     return bool(re.search(r"[äöüßÄÖÜ]", text))
@@ -564,6 +641,14 @@ def _build_variants(result: NormalizedQuery) -> list[str]:
     # If fat% found, add a variant with it included
     if result.fat_percent:
         variants.append(f"{result.cleaned} {result.fat_percent}% fett")
+
+    # Compound word splitting/joining: try both forms
+    split = _compound_split(result.cleaned)
+    if split:
+        variants.append(split)
+    joined = _compound_join(result.cleaned)
+    if joined:
+        variants.append(joined)
 
     return variants
 

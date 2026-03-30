@@ -17,6 +17,8 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from modules.food_group_classifier import classify
+
 st.set_page_config(page_title="BLS Food Code Matcher", page_icon="🍽️", layout="wide")
 
 
@@ -62,12 +64,22 @@ def confidence_label(conf):
     else: return "🔴 Low"
 
 
+def nova_badge(nova):
+    if nova is None:
+        return "<span style='color:#888;'>—</span>"
+    colors = {1: "#22c55e", 2: "#84cc16", 3: "#eab308", 4: "#ef4444"}
+    c = colors.get(nova, "#888")
+    return f"<span style='background:{c}; color:white; padding:2px 8px; border-radius:4px; font-weight:bold;'>NOVA {nova}</span>"
+
+
 def display_matches(matches, version_label):
     if not matches:
         st.info(f"No matches found for {version_label}")
         return
+    bls_ver = "302" if "3.02" in version_label else "40"
     for m in matches:
         color = confidence_color(m.confidence)
+        cls = classify(m.code, bls_ver)
         col1, col2 = st.columns([1, 11])
         with col1:
             st.markdown(
@@ -79,6 +91,13 @@ def display_matches(matches, version_label):
                 f"<span style='color:{color}; font-weight:600;'>"
                 f"{confidence_label(m.confidence)} ({m.confidence:.0%})</span>"
                 f"&nbsp;&nbsp;—&nbsp;&nbsp;{m.reasoning}",
+                unsafe_allow_html=True)
+            main_str = cls['main_group'] or '—'
+            sub_str = cls['sub_group'] or '—'
+            src_tag = f"<span style='color:#888; font-size:0.85em;'>[{cls['source']}]</span>" if cls['source'] else ""
+            st.markdown(
+                f"**Group:** {main_str} &nbsp;|&nbsp; **Sub:** {sub_str} &nbsp;|&nbsp; "
+                f"{nova_badge(cls['nova'])} {src_tag}",
                 unsafe_allow_html=True)
         st.divider()
 
