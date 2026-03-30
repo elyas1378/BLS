@@ -18,8 +18,22 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from modules.food_group_classifier import classify
+from modules.claude_cache import ClaudeCache
 
 st.set_page_config(page_title="BLS Food Code Matcher", page_icon="🍽️", layout="wide")
+
+# ── Persistent cache (shared across reruns) ──
+@st.cache_resource
+def get_cache():
+    return ClaudeCache()
+
+# ── Session state init ──
+if "cache_hits" not in st.session_state:
+    st.session_state.cache_hits = 0
+if "api_calls" not in st.session_state:
+    st.session_state.api_calls = 0
+if "requery_food" not in st.session_state:
+    st.session_state.requery_food = None
 
 
 @st.cache_resource
@@ -28,20 +42,11 @@ def load_text_retriever():
     return TextMatchRetriever(verbose=False)
 
 
-@st.cache_resource
-def load_catalogs():
-    import pandas as pd
-    from config.settings import CATALOG_302, CATALOG_40
-    cat302 = dict(zip(*pd.read_parquet(CATALOG_302)[["code","name_de"]].values.T)) if CATALOG_302.exists() else {}
-    cat40 = dict(zip(*pd.read_parquet(CATALOG_40)[["code","name_de"]].values.T)) if CATALOG_40.exists() else {}
-    return cat302, cat40
-
-
 def get_reranker(api_key):
     if not api_key: return None
     try:
         from modules.reranker_v2 import RerankerV2
-        return RerankerV2(api_key=api_key)
+        return RerankerV2(api_key=api_key, cache=get_cache())
     except Exception as e:
         st.warning(f"Could not load Claude reranker: {e}")
         return None
@@ -72,7 +77,17 @@ def nova_badge(nova):
     return f"<span style='background:{c}; color:white; padding:2px 8px; border-radius:4px; font-weight:bold;'>NOVA {nova}</span>"
 
 
-def display_matches(matches, version_label):
+def source_tag(source: str) -> str:
+    if source == "cached":
+        return "<span style='background:#6366f1; color:white; padding:1px 6px; border-radius:3px; font-size:0.8em;'>cached</span>"
+    elif source == "api":
+        return "<span style='background:#f59e0b; color:white; padding:1px 6px; border-radius:3px; font-size:0.8em;'>live API</span>"
+    elif source == "verified":
+        return "<span style='background:#22c55e; color:white; padding:1px 6px; border-radius:3px; font-size:0.8em;'>verified</span>"
+    return ""
+
+
+def display_matches(matches, version_label, result_source=""):
     if not matches:
         st.info(f"No matches found for {version_label}")
         return
@@ -86,7 +101,8 @@ def display_matches(matches, version_label):
                 f"<div style='text-align:center; font-size:24px; font-weight:bold; color:{color};'>{m.rank}</div>",
                 unsafe_allow_html=True)
         with col2:
-            st.markdown(f"**`{m.code}`** — {m.name}")
+            st.markdown(f"**`{m.code}`** — {m.name} &nbsp;{source_tag(result_source)}",
+                        unsafe_allow_html=True)
             st.markdown(
                 f"<span style='color:{color}; font-weight:600;'>"
                 f"{confidence_label(m.confidence)} ({m.confidence:.0%})</span>"
@@ -162,6 +178,15 @@ with st.sidebar:
     st.header("📊 Pipeline")
     st.markdown("1. **Normalize** — clean text, expand synonyms\n2. **Text search** — 14,814 + 7,140 BLS entries\n3. **Concept expansion** — 239 food mappings\n4. **Re-rank** — Claude picks best 3\n5. **Validate** — codes checked against catalog")
     st.divider()
+    # Cache stats
+    cache = get_cache()
+    st.header("💾 Cache")
+    st.markdown(
+        f"**Cache:** {cache.size} entries &nbsp;|&nbsp; "
+        f"**Session:** {st.session_state.cache_hits} cache hits, "
+        f"{st.session_state.api_calls} API calls"
+    )
+    st.divider()
     st.markdown("**Try:** Haferflocken, Spiegelei, Chicken salad, Magnum Mandel (Eis), Döner, Joghurt 3,5% Fett, Kimchi, Kürbiscurry, Käsekuchen")
 
 with st.spinner("Loading BLS catalogs..."):
@@ -188,16 +213,47 @@ if query:
     if use_claude and api_key_input:
         reranker = get_reranker(api_key_input)
         if reranker:
+            # Check if this is a re-query
+            skip_cache = (st.session_state.requery_food == query)
+            if skip_cache:
+                cache.delete(query)
+                st.session_state.requery_food = None
+
+            old_hits = reranker.session_cache_hits
+            old_calls = reranker.session_api_calls
+
             with st.spinner("🤖 Claude is analyzing candidates..."):
-                result = reranker.rerank(query, candidates)
+                result = reranker.rerank(query, candidates, skip_cache=skip_cache)
+
+            # Update session counters from reranker deltas
+            st.session_state.cache_hits += reranker.session_cache_hits - old_hits
+            st.session_state.api_calls += reranker.session_api_calls - old_calls
+
             if result.error:
                 st.error(f"API error: {result.error}")
             else:
-                is_verified = any("Verified" in m.reasoning for m in (result.bls302_matches or []))
-                st.caption("✅ Verified lookup — no API cost" if is_verified else "🤖 Re-ranked by Claude API")
+                # Status line
+                if result.bls302_source == "verified":
+                    st.caption("✅ Verified lookup — no API cost")
+                elif result.bls302_source == "cached":
+                    st.caption("💾 Served from cache — no API cost")
+                else:
+                    st.caption("🤖 Re-ranked by Claude API")
+
+                # Re-query button (only for cached results)
+                has_cached = result.bls302_source == "cached" or result.bls40_source == "cached"
+                if has_cached:
+                    if st.button("🔄 Re-query (delete cache & call API fresh)", key="requery_btn"):
+                        st.session_state.requery_food = query
+                        st.rerun()
+
                 col302, col40 = st.columns(2)
-                with col302: st.subheader("📘 BLS 3.02"); display_matches(result.bls302_matches, "BLS 3.02")
-                with col40: st.subheader("📗 BLS 4.0"); display_matches(result.bls40_matches, "BLS 4.0")
+                with col302:
+                    st.subheader("📘 BLS 3.02")
+                    display_matches(result.bls302_matches, "BLS 3.02", result.bls302_source)
+                with col40:
+                    st.subheader("📗 BLS 4.0")
+                    display_matches(result.bls40_matches, "BLS 4.0", result.bls40_source)
         else:
             use_claude = False
 

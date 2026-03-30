@@ -55,6 +55,8 @@ class RerankerResult:
     bls302_matches: list[RankedMatch] = field(default_factory=list)
     bls40_matches: list[RankedMatch] = field(default_factory=list)
     error: str | None = None
+    bls302_source: str = ""   # "verified", "cached", "api"
+    bls40_source: str = ""    # "verified", "cached", "api"
 
 
 # =====================================================================
@@ -114,7 +116,7 @@ Confidence: 0.90-1.0 = near-exact, 0.70-0.89 = strong, 0.50-0.69 = reasonable, <
 # =====================================================================
 
 class RerankerV2:
-    def __init__(self, api_key: str | None = None):
+    def __init__(self, api_key: str | None = None, cache=None):
         import anthropic
 
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
@@ -123,6 +125,9 @@ class RerankerV2:
 
         self.client = anthropic.Anthropic(api_key=key)
         self.model = CLAUDE_MODEL
+        self.cache = cache  # ClaudeCache instance (or None to disable)
+        self.session_cache_hits = 0
+        self.session_api_calls = 0
 
         # Build system prompt
         fg = "\n".join(f"  {k} = {v}" for k, v in FOOD_GROUP_LETTERS.items())
@@ -227,10 +232,22 @@ class RerankerV2:
 
         return results[:3]
 
-    def rerank(self, food_description: str, retrieval_results: dict) -> RerankerResult:
+    @staticmethod
+    def _matches_to_dicts(matches: list[RankedMatch]) -> list[dict]:
+        return [m.to_dict() for m in matches]
+
+    @staticmethod
+    def _dicts_to_matches(dicts: list[dict]) -> list[RankedMatch]:
+        return [RankedMatch(
+            rank=d["rank"], code=d["code"], name=d["name"],
+            confidence=d["confidence"], reasoning=d["reasoning"],
+        ) for d in dicts]
+
+    def rerank(self, food_description: str, retrieval_results: dict,
+               skip_cache: bool = False) -> RerankerResult:
         """
         Re-rank candidates for BOTH BLS versions.
-        Uses verified lookup first (free), Claude only for unknown foods.
+        Uses verified lookup first (free), then cache, then Claude.
         """
         result = RerankerResult(food_description=food_description)
         nq = retrieval_results["query"]
@@ -247,6 +264,7 @@ class RerankerV2:
                     rank=1, code=v302, name=name, confidence=0.95,
                     reasoning=f"Verified: '{food_description}' -> [{v302}]"
                 )]
+                result.bls302_source = "verified"
 
             if v40:
                 name = self._names_40.get(v40, v40)
@@ -254,56 +272,81 @@ class RerankerV2:
                     rank=1, code=v40, name=name, confidence=0.95,
                     reasoning=f"Verified 4.0: '{food_description}' -> [{v40}]"
                 )]
+                result.bls40_source = "verified"
 
             # If both verified, skip Claude entirely
             if v302 and v40:
                 return result
 
-            # If only one verified, still call Claude for the other
-            # ── BLS 3.02 (Claude) ──
+            # ── BLS 3.02: cache → Claude ──
             if not v302 and retrieval_results.get("bls302"):
-                cands_302 = [c.to_dict() if hasattr(c, "to_dict") else c
-                             for c in retrieval_results["bls302"]]
-                cand_codes_302 = {c["code"] for c in cands_302}
+                cached = None
+                if self.cache and not skip_cache:
+                    cached = self.cache.get(food_description, "BLS 3.02")
+                if cached is not None:
+                    result.bls302_matches = self._dicts_to_matches(cached)
+                    result.bls302_source = "cached"
+                    self.session_cache_hits += 1
+                else:
+                    cands_302 = [c.to_dict() if hasattr(c, "to_dict") else c
+                                 for c in retrieval_results["bls302"]]
+                    cand_codes_302 = {c["code"] for c in cands_302}
+                    prompt_302 = self._build_prompt(
+                        food_description, cands_302, "BLS 3.02",
+                        prep_state=nq.prep_state, fat_percent=nq.fat_percent,
+                    )
+                    result.bls302_matches = self._call_claude(
+                        prompt_302, self._valid_302, cand_codes_302
+                    )
+                    self.session_api_calls += 1
+                    result.bls302_source = "api"
 
-                prompt_302 = self._build_prompt(
-                    food_description, cands_302, "BLS 3.02",
-                    prep_state=nq.prep_state, fat_percent=nq.fat_percent,
-                )
-                result.bls302_matches = self._call_claude(
-                    prompt_302, self._valid_302, cand_codes_302
-                )
+                    # Fallback if Claude returned nothing
+                    if not result.bls302_matches and cands_302:
+                        for i, c in enumerate(cands_302[:3], 1):
+                            result.bls302_matches.append(RankedMatch(
+                                rank=i, code=c["code"], name=c["name_de"],
+                                confidence=c["score"] * 0.7,
+                                reasoning="Fallback: Claude returned no valid codes",
+                            ))
+                    # Save to cache
+                    if self.cache and result.bls302_matches:
+                        self.cache.put(food_description, "BLS 3.02",
+                                       self._matches_to_dicts(result.bls302_matches))
 
-                # Fallback: if Claude returned nothing valid, use top FAISS candidates
-                if not result.bls302_matches and cands_302:
-                    for i, c in enumerate(cands_302[:3], 1):
-                        result.bls302_matches.append(RankedMatch(
-                            rank=i, code=c["code"], name=c["name_de"],
-                            confidence=c["score"] * 0.7,
-                            reasoning="Fallback: Claude returned no valid codes",
-                        ))
-
-            # ── BLS 4.0 (Claude) ──
+            # ── BLS 4.0: cache → Claude ──
             if not v40 and retrieval_results.get("bls40"):
-                cands_40 = [c.to_dict() if hasattr(c, "to_dict") else c
-                            for c in retrieval_results["bls40"]]
-                cand_codes_40 = {c["code"] for c in cands_40}
+                cached = None
+                if self.cache and not skip_cache:
+                    cached = self.cache.get(food_description, "BLS 4.0")
+                if cached is not None:
+                    result.bls40_matches = self._dicts_to_matches(cached)
+                    result.bls40_source = "cached"
+                    self.session_cache_hits += 1
+                else:
+                    cands_40 = [c.to_dict() if hasattr(c, "to_dict") else c
+                                for c in retrieval_results["bls40"]]
+                    cand_codes_40 = {c["code"] for c in cands_40}
+                    prompt_40 = self._build_prompt(
+                        food_description, cands_40, "BLS 4.0",
+                        prep_state=nq.prep_state, fat_percent=nq.fat_percent,
+                    )
+                    result.bls40_matches = self._call_claude(
+                        prompt_40, self._valid_40, cand_codes_40
+                    )
+                    self.session_api_calls += 1
+                    result.bls40_source = "api"
 
-                prompt_40 = self._build_prompt(
-                    food_description, cands_40, "BLS 4.0",
-                    prep_state=nq.prep_state, fat_percent=nq.fat_percent,
-                )
-                result.bls40_matches = self._call_claude(
-                    prompt_40, self._valid_40, cand_codes_40
-                )
-
-                if not result.bls40_matches and cands_40:
-                    for i, c in enumerate(cands_40[:3], 1):
-                        result.bls40_matches.append(RankedMatch(
-                            rank=i, code=c["code"], name=c["name_de"],
-                            confidence=c["score"] * 0.7,
-                            reasoning="Fallback: Claude returned no valid codes",
-                        ))
+                    if not result.bls40_matches and cands_40:
+                        for i, c in enumerate(cands_40[:3], 1):
+                            result.bls40_matches.append(RankedMatch(
+                                rank=i, code=c["code"], name=c["name_de"],
+                                confidence=c["score"] * 0.7,
+                                reasoning="Fallback: Claude returned no valid codes",
+                            ))
+                    if self.cache and result.bls40_matches:
+                        self.cache.put(food_description, "BLS 4.0",
+                                       self._matches_to_dicts(result.bls40_matches))
 
         except Exception as e:
             result.error = str(e)
