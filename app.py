@@ -176,7 +176,7 @@ def nova_pill(nova):
     return f"<span class='nova-pill' style='background:{bg};'>NOVA {nova}</span>"
 
 
-def safety_flag(result):
+def safety_flag(result, food_desc=None, brand=None):
     """Compute safety flag from a RerankerResult."""
     m302 = result.bls302_matches
     m40 = result.bls40_matches
@@ -203,8 +203,8 @@ def safety_flag(result):
 
     # Condition 2: food group classification differs
     if top302 and top40:
-        cls302 = classify(top302.code, "302")
-        cls40 = classify(top40.code, "40")
+        cls302 = classify(top302.code, "302", food_desc, brand)
+        cls40 = classify(top40.code, "40", food_desc, brand)
         if cls302["main_group"] and cls40["main_group"]:
             if cls302["main_group"] != cls40["main_group"]:
                 return "check"
@@ -234,7 +234,7 @@ def build_summary_row(query_text, nq, result, flag):
     c40_3 = _m(m40, 2)
 
     # Food group from top-1 BLS 3.02
-    cls = classify(m302[0].code, "302") if m302 else {"main_group": None, "sub_group": None, "nova": None}
+    cls = classify(m302[0].code, "302", query_text, nq.brand) if m302 else {"main_group": None, "sub_group": None, "nova": None}
 
     def _fmt_conf(c):
         return f"{c:.0%}" if c is not None else "—"
@@ -315,11 +315,11 @@ def render_summary_table(row):
     return html
 
 
-def display_card(m, bls_ver, result_source=""):
+def display_card(m, bls_ver, result_source="", food_desc=None, brand=None):
     """Render a single match as a styled card."""
     color = conf_color(m.confidence)
     bg = conf_bg(m.confidence)
-    cls = classify(m.code, bls_ver)
+    cls = classify(m.code, bls_ver, food_desc, brand)
     main_str = (cls["main_group"] or "—").replace("_", " ")
     sub_str = (cls["sub_group"] or "—").replace("_", " ")
     pct = int(m.confidence * 100)
@@ -500,7 +500,7 @@ if query:
         result = smart.rerank(query, candidates)
 
     # ── Safety flag ──
-    flag = safety_flag(result)
+    flag = safety_flag(result, query, nq.brand)
 
     # ── Summary table ──
     row = build_summary_row(query, nq, result, flag)
@@ -565,7 +565,7 @@ if query:
         )
         if result.bls302_matches:
             for m in result.bls302_matches:
-                display_card(m, "302", src302)
+                display_card(m, "302", src302, query, nq.brand)
         else:
             st.markdown(
                 "<div class='result-card' style='text-align:center; color:#94a3b8;'>No matches</div>",
@@ -579,7 +579,7 @@ if query:
         )
         if result.bls40_matches:
             for m in result.bls40_matches:
-                display_card(m, "40", src40)
+                display_card(m, "40", src40, query, nq.brand)
         else:
             st.markdown(
                 "<div class='result-card' style='text-align:center; color:#94a3b8;'>No matches</div>",

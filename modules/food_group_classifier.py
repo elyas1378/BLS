@@ -177,12 +177,77 @@ def _nova_fallback(code: str) -> int | None:
 
 
 # ═══════════════════════════════════════════════════════════
+#  Description-based NOVA overrides
+#  Runs AFTER BLS code lookup to correct known wrong cases
+# ═══════════════════════════════════════════════════════════
+
+_NOVA4_KEYWORDS = {
+    "energy drink", "energydrink", "red bull", "cola", "fanta", "sprite",
+    "pepsi", "chips", "pringles", "snickers", "mars", "twix", "oreo",
+    "milka", "haribo", "gummibärchen", "ketchup", "fertiggericht",
+    "tiefkühl", "instant", "mikrowelle", "dosensuppe", "tütensuppe",
+    "cornflakes", "toast",
+}
+
+_NOVA1_KEYWORDS = {
+    "roh", "frisch",
+}
+# NOVA 1 only applies when combined with these food-group letters
+_NOVA1_LETTERS = {"F", "G", "V", "U", "T", "E", "H", "K", "N"}
+
+_NOVA2_KEYWORDS = {
+    "olivenöl", "rapsöl", "butter", "honig", "zucker", "mehl",
+    "essig", "salz", "leinöl", "sonnenblumenöl", "kokosöl", "rapsöl",
+}
+
+
+def _nova_override(nova: int | None, food_desc: str | None,
+                   brand: str | None, code: str | None) -> int | None:
+    """Apply description-based NOVA overrides on top of code-based NOVA."""
+    if food_desc is None:
+        return nova
+
+    lower = food_desc.lower().strip()
+    letter = code[0].upper() if code else ""
+
+    # Rule 1: branded products → NOVA 4
+    if brand is not None:
+        return 4
+
+    # Rule 2: NOVA 4 keywords
+    for kw in _NOVA4_KEYWORDS:
+        if kw in lower:
+            return 4
+
+    # Rule 3: NOVA 2 keywords (processed culinary ingredients)
+    for kw in _NOVA2_KEYWORDS:
+        if kw in lower:
+            return 2
+
+    # Rule 4: NOVA 1 keywords (only for raw foods in appropriate groups)
+    if letter in _NOVA1_LETTERS:
+        for kw in _NOVA1_KEYWORDS:
+            if kw in lower:
+                return 1
+
+    return nova
+
+
+# ═══════════════════════════════════════════════════════════
 #  Public API
 # ═══════════════════════════════════════════════════════════
 
-def classify(code: str, bls_version: str = "302") -> dict:
+def classify(code: str, bls_version: str = "302",
+             food_desc: str | None = None,
+             brand: str | None = None) -> dict:
     """
     Classify a BLS code into FIT study food groups and NOVA.
+
+    Args:
+        code: BLS code (e.g. "B173000")
+        bls_version: "302" or "40"
+        food_desc: original food description (for NOVA overrides)
+        brand: detected brand name (for NOVA overrides)
 
     Returns:
         {
@@ -206,6 +271,7 @@ def classify(code: str, bls_version: str = "302") -> dict:
         nova = NOVA_40.get(code)
 
     if main is not None:
+        nova = _nova_override(nova, food_desc, brand, code)
         return {"main_group": main, "sub_group": sub, "nova": nova, "source": "lookup"}
 
     # Tier 2: rule-based fallback
@@ -239,5 +305,7 @@ def classify(code: str, bls_version: str = "302") -> dict:
     nova = LETTER_TO_NOVA.get(letter)
     if nova is None:
         nova = _nova_fallback(code)
+
+    nova = _nova_override(nova, food_desc, brand, code)
 
     return {"main_group": main, "sub_group": sub, "nova": nova, "source": "rule"}
