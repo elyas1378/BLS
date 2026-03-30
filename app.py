@@ -203,8 +203,8 @@ def safety_flag(result, food_desc=None, brand=None):
 
     # Condition 2: food group classification differs
     if top302 and top40:
-        cls302 = classify(top302.code, "302", food_desc, brand)
-        cls40 = classify(top40.code, "40", food_desc, brand)
+        cls302 = classify(top302.code, "302", food_desc=food_desc, brand=brand)
+        cls40 = classify(top40.code, "40", food_desc=food_desc, brand=brand)
         if cls302["main_group"] and cls40["main_group"]:
             if cls302["main_group"] != cls40["main_group"]:
                 return "check"
@@ -234,7 +234,7 @@ def build_summary_row(query_text, nq, result, flag):
     c40_3 = _m(m40, 2)
 
     # Food group from top-1 BLS 3.02
-    cls = classify(m302[0].code, "302", query_text, nq.brand) if m302 else {"main_group": None, "sub_group": None, "nova": None}
+    cls = classify(m302[0].code, "302", food_desc=query_text, brand=nq.brand) if m302 else {"main_group": None, "sub_group": None, "nova": None}
 
     def _fmt_conf(c):
         return f"{c:.0%}" if c is not None else "—"
@@ -319,7 +319,7 @@ def display_card(m, bls_ver, result_source="", food_desc=None, brand=None):
     """Render a single match as a styled card."""
     color = conf_color(m.confidence)
     bg = conf_bg(m.confidence)
-    cls = classify(m.code, bls_ver, food_desc, brand)
+    cls = classify(m.code, bls_ver, food_desc=food_desc, brand=brand)
     main_str = (cls["main_group"] or "—").replace("_", " ")
     sub_str = (cls["sub_group"] or "—").replace("_", " ")
     pct = int(m.confidence * 100)
