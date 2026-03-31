@@ -356,6 +356,7 @@ BRAND_MAP: dict[str, str] = {
     # Spreads / fats
     "rama":          "margarine halbfett",
     "meggle":        "butter",
+    "lätta":         "margarine halbfett",
     "kerrygold":     "butter",
     "nutella":       "nuss-nougat-creme",
     "zentis":        "konfitüre marmelade",
