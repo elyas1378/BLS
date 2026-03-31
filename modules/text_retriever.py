@@ -152,9 +152,9 @@ class TextMatchRetriever:
             if overlap:
                 score += 0.3 * len(overlap) / max(len(query_words), 1)
 
-            # Fuzzy string similarity
+            # Fuzzy string similarity (weighted higher to catch 1-2 char typos)
             sim = SequenceMatcher(None, query_lower, name_lower).ratio()
-            score += sim * 0.5
+            score += sim * 0.6
 
             # Name length penalty: prefer shorter (more specific) names
             # but not too short (category headers)
@@ -164,7 +164,7 @@ class TextMatchRetriever:
             elif name_len > 60:
                 score -= 0.05
 
-            if score > 0.2:
+            if score > 0.15:
                 candidates[code] = (score, row, "text")
 
         # ── Strategy 3: Substring search for remaining ──

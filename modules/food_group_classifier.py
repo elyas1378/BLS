@@ -201,6 +201,15 @@ _NOVA2_KEYWORDS = {
 }
 
 
+_NOVA4_BRANDS = {
+    "snickers", "mars", "twix", "milka", "oreo", "pringles", "red bull",
+    "fanta", "pepsi", "coca cola", "coca-cola", "sprite", "haribo", "maggi",
+    "duplo", "hanuta", "knoppers", "ferrero", "kinder", "corny", "maoam",
+    "ritter sport", "chio", "vitalis", "bionade", "wagner", "schweppes",
+    "magnum", "froop", "knorr",
+}
+
+
 def _nova_override(nova: int | None, food_desc: str | None,
                    brand: str | None, code: str | None) -> int | None:
     """Apply description-based NOVA overrides on top of code-based NOVA."""
@@ -210,8 +219,11 @@ def _nova_override(nova: int | None, food_desc: str | None,
     lower = food_desc.lower().strip()
     letter = code[0].upper() if code else ""
 
-    # Rule 1: branded products → NOVA 4
-    if brand is not None:
+    # Rule 1: only confirmed ultra-processed brands → NOVA 4
+    # Cheese brands (gruyère, leerdammer, bergader, philadelphia),
+    # dairy brands (alpro, alnatura, landliebe, kölln), and
+    # meat brands (rügenwalder) keep their lookup-table NOVA.
+    if brand is not None and brand in _NOVA4_BRANDS:
         return 4
 
     # Rule 2: NOVA 4 keywords

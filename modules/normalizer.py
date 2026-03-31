@@ -336,15 +336,31 @@ ENGLISH_TO_GERMAN: dict[str, str] = {
 
 # Known brand names → generic BLS category
 BRAND_MAP: dict[str, str] = {
+    # Sauces / cooking
     "maggi":         "grundsoße braun trockenprodukt",
     "knorr":         "grundsoße trockenprodukt",
     "dr. oetker":    "backzutat",
     "dr oetker":     "backzutat",
+    "mondamin":      "speisestärke",
+    "miracoli":      "teigwaren tomatensoße",
+    "barilla":       "teigwaren eifrei",
+    "hela":          "gewürzketchup",
+    "thomy":         "mayonnaise senf",
+    "develey":       "senf",
+    "heinz":         "ketchup tomatenketchup",
+    "kühne":         "essig gewürzgurken",
+    # Frozen / convenience
     "iglo":          "tiefkühlgemüse",
     "frosta":        "tiefkühlgericht",
+    "wagner":        "pizza tiefkühl",
+    # Spreads / fats
     "rama":          "margarine halbfett",
+    "meggle":        "butter",
+    "kerrygold":     "butter",
     "nutella":       "nuss-nougat-creme",
-    "haribo":        "gummibonbon fruchtgummi",
+    "zentis":        "konfitüre marmelade",
+    "schwartau":     "konfitüre marmelade",
+    # Soft drinks / beverages
     "coca cola":     "colagetränk",
     "coca-cola":     "colagetränk",
     "pepsi":         "colagetränk",
@@ -352,6 +368,15 @@ BRAND_MAP: dict[str, str] = {
     "sprite":        "limonade zitrone",
     "schweppes":     "limonade tonic",
     "red bull":      "energydrink",
+    "bionade":       "limonade",
+    "fritz-kola":    "colagetränk",
+    "fritz kola":    "colagetränk",
+    "mezzo mix":     "colagetränk mischgetränk",
+    "mezzomix":      "colagetränk mischgetränk",
+    "club mate":     "limonade koffeinhaltig",
+    "volvic":        "trinkwasser mineralwasser",
+    # Sweets / snacks
+    "haribo":        "gummibonbon fruchtgummi",
     "snickers":      "schokoriegel",
     "mars":          "schokoriegel",
     "twix":          "schokoriegel",
@@ -359,10 +384,69 @@ BRAND_MAP: dict[str, str] = {
     "oreo":          "keks sandwich",
     "pringles":      "kartoffelchips",
     "magnum":        "milchspeiseeis",
+    "duplo":         "schokoriegel waffel",
+    "hanuta":        "waffel haselnuss",
+    "knoppers":      "waffel milchcreme",
+    "ferrero":       "praline schokolade",
+    "kinder":        "schokolade milchcreme",
+    "kinderschokolade": "schokolade milchcreme",
+    "corny":         "müsliriegel",
+    "ritter sport":  "schokolade tafelschokolade",
+    "lindt":         "schokolade praline",
+    "maoam":         "kaubonbon frucht",
+    "katjes":        "fruchtgummi",
+    "trolli":        "fruchtgummi",
+    "nimm2":         "bonbon frucht",
+    "toffifee":      "praline karamell haselnuss",
+    "raffaello":     "praline kokos",
+    "rocher":        "praline haselnuss schokolade",
+    "pick up":       "keksriegel schokolade",
+    "leibniz":       "keks butterkeks",
+    "balisto":       "schokoriegel müsli",
+    "chio":          "kartoffelchips",
+    "funny frisch":  "kartoffelchips",
+    "funny-frisch":  "kartoffelchips",
+    "vitalis":       "müsli knuspermüsli",
+    # Dairy brands (keep product context, NOT ultra-processed)
     "froop":         "fruchtjoghurt",
     "gruyère":       "hartkäse",
     "gruyere":       "hartkäse",
-    "rewe":          "",      # store brand — ignore
+    "leerdammer":    "schnittkäse",
+    "bergader":      "weichkäse",
+    "philadelphia":  "frischkäse doppelrahmstufe",
+    "exquisa":       "frischkäse quark",
+    "arla":          "skyr quark",
+    "landliebe":     "joghurt milch",
+    "weihenstephan": "joghurt quark",
+    "zott":          "joghurt fruchtjoghurt",
+    "ehrmann":       "joghurt fruchtjoghurt",
+    "almighurt":     "fruchtjoghurt",
+    "bauer":         "fruchtjoghurt",
+    "actimel":       "joghurtdrink",
+    "activia":       "joghurt probiotisch",
+    "müller":        "milchreis joghurt",
+    # Plant milk / vegan
+    "alpro":         "sojadrink pflanzenmilch",
+    "oatly":         "haferdrink pflanzenmilch",
+    "vemondo":       "pflanzenmilch",
+    # Cereals / grain brands
+    "kölln":         "haferflocken müsli",
+    "alnatura":      "müsli haferflocken",
+    "seitenbacher":  "müsli",
+    "kelloggs":      "cornflakes frühstückscerealien",
+    "kellogs":       "cornflakes frühstückscerealien",
+    # Meat brands
+    "rügenwalder":   "wurst aufschnitt",
+    "herta":         "schinken aufschnitt",
+    "gutfried":      "geflügelwurst",
+    "wiesenhof":     "hähnchenfleisch",
+    "dulano":        "wurst salami",
+    # Bakery brands
+    "golden toast":  "toastbrot weizen",
+    "mestemacher":   "vollkornbrot",
+    "harry":         "brot scheibenbrot",
+    # Store brands — ignore
+    "rewe":          "",
     "aldi":          "",
     "lidl":          "",
     "edeka":         "",
@@ -373,6 +457,7 @@ BRAND_MAP: dict[str, str] = {
     "rossmann":      "",
     "ja!":           "",
     "gut & günstig":  "",
+    "demeter":       "",
 }
 
 # Preparation-state keywords to detect and extract
@@ -428,6 +513,36 @@ ENGLISH_MARKERS = {
 }
 
 
+# Known typos / misspellings → corrected form
+TYPO_CORRECTIONS: dict[str, str] = {
+    "cappucchino":     "cappuccino",
+    "capucchino":      "cappuccino",
+    "mayonaise":       "mayonnaise",
+    "knäckebort":      "knäckebrot",
+    "bokwürste":       "bockwürste",
+    "karoffeln":       "kartoffeln",
+    "biren":           "birnen",
+    "truthanbrust":    "truthahnbrust",
+    "seranoschiken":   "serranoschinken",
+    "waser":           "wasser",
+    "bruscetta":       "bruschetta",
+    "radelr":          "radler",
+    "raffaelo":        "raffaello",
+    "roiboschtee":     "rooibostee",
+    "meerettich":      "meerrettich",
+    "merretich":       "meerrettich",
+    "almiguhrt":       "almighurt",
+    "pflattpfirsiche": "plattpfirsiche",
+    "kinderbuono":     "kinder bueno",
+    "laugenbagutte":   "laugenbaguette",
+    "kapuzienerkresse": "kapuzinerkresse",
+    "prmium müsi":     "premium müsli",
+    "akarzienhonig":   "akazienhonig",
+    "americaner":      "amerikaner",
+    "bresola":         "bresaola",
+}
+
+
 # =====================================================================
 #  Core normalization function
 # =====================================================================
@@ -455,6 +570,14 @@ def normalize(text: str) -> NormalizedQuery:
     if not working:
         result.cleaned = ""
         return result
+
+    # 0. Typo correction (case-insensitive check)
+    working_lower_check = working.lower()
+    for typo, correction in TYPO_CORRECTIONS.items():
+        if typo in working_lower_check:
+            # Preserve case structure where possible
+            working = re.sub(re.escape(typo), correction, working, flags=re.IGNORECASE)
+            working_lower_check = working.lower()
 
     # 1. Extract fat percentage BEFORE lowercasing (preserve original)
     #    But skip if this is an alcoholic/beverage context (% = alcohol, not fat)
@@ -534,6 +657,11 @@ _BEVERAGE_KEYWORDS = {
     "likör", "radler", "glühwein", "aperol", "hugo", "whisky", "cognac",
     "schnaps", "grappa", "absinth", "champagner", "cider", "met",
     "weißwein", "rotwein", "rosé", "rose", "weinschorle",
+    # Added from gap analysis — missing alcohol contexts
+    "cocktail", "alk", "alkohol", "spirituose", "eierlikör", "baileys",
+    "jägermeister", "ouzo", "tequila", "mezcal", "brandy", "amaretto",
+    "limoncello", "martini", "caipirinha", "mojito", "sangria", "bowle",
+    "punsch", "grog",
 }
 
 
@@ -545,6 +673,7 @@ def _is_beverage_context(text: str) -> bool:
 
 # Common German food word stems for compound splitting/joining
 _COMPOUND_PARTS = [
+    # Original 68 parts
     "kürbis", "tomaten", "tomate", "kartoffel", "apfel", "nuss", "nuß",
     "schinken", "käse", "zwiebel", "knoblauch", "karotten", "möhren",
     "spinat", "brokkoli", "broccoli", "hähnchen", "hühner", "rinds",
@@ -556,6 +685,14 @@ _COMPOUND_PARTS = [
     "kokos", "mandel", "walnuss", "cashew", "erdnuss", "sesam",
     "sonnenblumen", "oliven", "pesto", "soße", "sauce", "suppe",
     "salat", "brot", "kuchen", "creme", "mus", "saft",
+    # Added from gap analysis — 43 missing compound parts
+    "aufschnitt", "aufstrich", "beere", "bohne", "drink", "eiweiß",
+    "erbse", "essig", "filet", "fleisch", "flocken", "frucht",
+    "füllung", "gemüse", "getränk", "honig", "kaffee", "karamell",
+    "kern", "kohl", "korn", "kraut", "linse", "marmelade", "marzipan",
+    "mehl", "nougat", "pfeffer", "protein", "pulver", "samen",
+    "scheibe", "schokolade", "senf", "tee", "teig", "vanille",
+    "vitamin", "wasser", "wurst", "zimt", "zucker", "laugen",
 ]
 # Sort longest first so "sonnenblumen" matches before "blumen"
 _COMPOUND_PARTS.sort(key=len, reverse=True)
