@@ -15,7 +15,7 @@ Usage:
 
 Prerequisites:
     pip install anthropic
-    export ANTHROPIC_API_KEY="sk-ant-..."
+    export ANTHROPIC_API_KEY="your-key-here"
 """
 
 from __future__ import annotations
@@ -57,6 +57,8 @@ class RerankerResult:
     error: str | None = None
     bls302_source: str = ""   # "verified", "cached", "api"
     bls40_source: str = ""    # "verified", "cached", "api"
+    claude_nova: int | None = None       # NOVA score from Claude (if requested)
+    claude_nova_reasoning: str = ""      # Claude's NOVA explanation
 
 
 # =====================================================================
@@ -99,13 +101,24 @@ ONLY pick a specific preparation code if the description explicitly states it:
 - Prefer entries with "Standardrezeptur" for recipe-type foods
 - When fat% is mentioned (e.g., "3,5% Fett"), match the closest fat level
 
-## Response format (ONLY this, no other text):
+## NOVA Classification
+Also classify this food according to the NOVA food classification system:
+- NOVA 1: Unprocessed or minimally processed foods (fresh fruits, vegetables, plain meat, eggs, milk, plain grains, water, coffee, tea)
+- NOVA 2: Processed culinary ingredients (oils, butter, sugar, flour, honey, salt)
+- NOVA 3: Processed foods (canned goods, cheese, bread, cured meats, beer, wine)
+- NOVA 4: Ultra-processed foods (soft drinks, chips, candy, instant noodles, frozen pizza, packaged snacks, sausages, sweetened cereals, ice cream, energy drinks, anything with brand names from industrial food companies)
+
+## Response format (ONLY this JSON, no other text):
 ```json
-[
-  {{"rank": 1, "code": "CODE_FROM_LIST", "name": "name", "confidence": 0.92, "reasoning": "brief reason"}},
-  {{"rank": 2, "code": "CODE_FROM_LIST", "name": "name", "confidence": 0.75, "reasoning": "brief reason"}},
-  {{"rank": 3, "code": "CODE_FROM_LIST", "name": "name", "confidence": 0.60, "reasoning": "brief reason"}}
-]
+{{
+  "matches": [
+    {{"rank": 1, "code": "CODE_FROM_LIST", "name": "name", "confidence": 0.92, "reasoning": "brief reason"}},
+    {{"rank": 2, "code": "CODE_FROM_LIST", "name": "name", "confidence": 0.75, "reasoning": "brief reason"}},
+    {{"rank": 3, "code": "CODE_FROM_LIST", "name": "name", "confidence": 0.60, "reasoning": "brief reason"}}
+  ],
+  "nova_score": 1,
+  "nova_reasoning": "One sentence explanation of NOVA classification"
+}}
 ```
 
 Confidence: 0.90-1.0 = near-exact, 0.70-0.89 = strong, 0.50-0.69 = reasonable, <0.50 = uncertain."""
@@ -183,8 +196,12 @@ class RerankerV2:
         return "\n".join(parts)
 
     def _call_claude(self, prompt: str, valid_codes: set,
-                     candidate_codes: set) -> list[RankedMatch]:
-        """Call Claude and validate the response."""
+                     candidate_codes: set) -> tuple[list[RankedMatch], int | None, str]:
+        """Call Claude and validate the response.
+
+        Returns:
+            (matches, nova_score, nova_reasoning)
+        """
         response = self.client.messages.create(
             model=self.model,
             max_tokens=800,
@@ -202,7 +219,19 @@ class RerankerV2:
                 text = text[:-3]
             text = text.strip()
 
-        matches_raw = json.loads(text)
+        parsed = json.loads(text)
+
+        # Handle both formats: new {matches, nova_score} and old [array]
+        nova_score = None
+        nova_reasoning = ""
+        if isinstance(parsed, dict):
+            matches_raw = parsed.get("matches", [])
+            nova_score = parsed.get("nova_score")
+            nova_reasoning = parsed.get("nova_reasoning", "")
+            if isinstance(nova_score, int) and nova_score not in (1, 2, 3, 4):
+                nova_score = None
+        else:
+            matches_raw = parsed  # old format: bare array
 
         # Validate each match
         results = []
@@ -230,7 +259,7 @@ class RerankerV2:
                 reasoning=m["reasoning"],
             ))
 
-        return results[:3]
+        return results[:3], nova_score, nova_reasoning
 
     @staticmethod
     def _matches_to_dicts(matches: list[RankedMatch]) -> list[dict]:
@@ -295,9 +324,14 @@ class RerankerV2:
                         food_description, cands_302, "BLS 3.02",
                         prep_state=nq.prep_state, fat_percent=nq.fat_percent,
                     )
-                    result.bls302_matches = self._call_claude(
+                    matches, nova, nova_reason = self._call_claude(
                         prompt_302, self._valid_302, cand_codes_302
                     )
+                    result.bls302_matches = matches
+                    # Store Claude's NOVA (first API call wins)
+                    if nova is not None and result.claude_nova is None:
+                        result.claude_nova = nova
+                        result.claude_nova_reasoning = nova_reason
                     self.session_api_calls += 1
                     result.bls302_source = "api"
 
@@ -331,9 +365,13 @@ class RerankerV2:
                         food_description, cands_40, "BLS 4.0",
                         prep_state=nq.prep_state, fat_percent=nq.fat_percent,
                     )
-                    result.bls40_matches = self._call_claude(
+                    matches, nova, nova_reason = self._call_claude(
                         prompt_40, self._valid_40, cand_codes_40
                     )
+                    result.bls40_matches = matches
+                    if nova is not None and result.claude_nova is None:
+                        result.claude_nova = nova
+                        result.claude_nova_reasoning = nova_reason
                     self.session_api_calls += 1
                     result.bls40_source = "api"
 

@@ -16,7 +16,20 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from modules.food_group_classifier import classify
+from modules.nova_classifier import classify_nova, needs_claude_nova
 from modules.claude_cache import ClaudeCache
+
+
+def resolve_nova(code, bls_version, food_desc, brand, claude_nova=None, used_claude=False):
+    """Resolve final NOVA: Layer 1+2, then Claude override if low confidence.
+
+    Returns: (nova, low_confidence)
+    """
+    nova_result = classify_nova(code, bls_version, food_desc or "", brand)
+    nova = nova_result["nova"]
+    if nova_result["needs_claude"] and used_claude and claude_nova is not None:
+        return claude_nova, False
+    return nova, nova_result["needs_claude"]
 
 st.set_page_config(
     page_title="BLS Food Code Matcher",
@@ -168,11 +181,16 @@ def source_badge(src):
     return f"<span class='badge {cls}'>{lbl}</span>"
 
 
-def nova_pill(nova):
+def nova_pill(nova, low_confidence=False):
     if nova is None:
         return "<span style='color:#94a3b8;'>—</span>"
     colors = {1: "#16a34a", 2: "#65a30d", 3: "#ca8a04", 4: "#dc2626"}
     bg = colors.get(nova, "#94a3b8")
+    if low_confidence:
+        label = f"NOVA {nova} (?)"
+        return (f"<span class='nova-pill' style='background:{bg}; opacity:0.6;' "
+                f"title='Low confidence — enable Claude API for better accuracy'>"
+                f"{label}</span>")
     return f"<span class='nova-pill' style='background:{bg};'>NOVA {nova}</span>"
 
 
@@ -218,7 +236,7 @@ def safety_badge_html(flag):
     return "<span class='badge badge-check'>CHECK</span>"
 
 
-def build_summary_row(query_text, nq, result, flag):
+def build_summary_row(query_text, nq, result, flag, claude_nova=None, used_claude=False):
     """Build a dict for the summary table."""
     def _m(matches, idx):
         if idx < len(matches):
@@ -235,6 +253,9 @@ def build_summary_row(query_text, nq, result, flag):
 
     # Food group from top-1 BLS 3.02
     cls = classify(m302[0].code, "302", food_desc=query_text, brand=nq.brand) if m302 else {"main_group": None, "sub_group": None, "nova": None}
+    if m302:
+        nova, _ = resolve_nova(m302[0].code, "302", query_text, nq.brand, claude_nova, used_claude)
+        cls["nova"] = nova
 
     def _fmt_conf(c):
         return f"{c:.0%}" if c is not None else "—"
@@ -315,7 +336,8 @@ def render_summary_table(row):
     return html
 
 
-def display_card(m, bls_ver, result_source="", food_desc=None, brand=None):
+def display_card(m, bls_ver, result_source="", food_desc=None, brand=None,
+                 claude_nova=None, used_claude=False):
     """Render a single match as a styled card."""
     color = conf_color(m.confidence)
     bg = conf_bg(m.confidence)
@@ -324,6 +346,8 @@ def display_card(m, bls_ver, result_source="", food_desc=None, brand=None):
     sub_str = (cls["sub_group"] or "—").replace("_", " ")
     pct = int(m.confidence * 100)
     bar_w = max(pct, 5)
+
+    nova, nova_low = resolve_nova(m.code, bls_ver, food_desc, brand, claude_nova, used_claude)
 
     src_html = f" {source_badge(result_source)}" if result_source and m.rank == 1 else ""
 
@@ -339,7 +363,7 @@ def display_card(m, bls_ver, result_source="", food_desc=None, brand=None):
             <span style="color:#64748b; font-size:0.82rem; margin-left:8px;">{m.reasoning}</span>
         </div>
         <div class="meta">
-            {main_str} &nbsp;&middot;&nbsp; {sub_str} &nbsp;&middot;&nbsp; {nova_pill(cls['nova'])}
+            {main_str} &nbsp;&middot;&nbsp; {sub_str} &nbsp;&middot;&nbsp; {nova_pill(nova, low_confidence=nova_low)}
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -501,11 +525,15 @@ if query:
         smart = get_smart_reranker()
         result = smart.rerank(query, candidates)
 
+    # ── Extract Claude NOVA if available ──
+    claude_nova = getattr(result, "claude_nova", None)
+
     # ── Safety flag ──
     flag = safety_flag(result, query, nq.brand)
 
     # ── Summary table ──
-    row = build_summary_row(query, nq, result, flag)
+    row = build_summary_row(query, nq, result, flag,
+                            claude_nova=claude_nova, used_claude=result_from_claude)
     st.markdown("##### Summary", unsafe_allow_html=True)
     st.markdown(render_summary_table(row), unsafe_allow_html=True)
 
@@ -567,7 +595,8 @@ if query:
         )
         if result.bls302_matches:
             for m in result.bls302_matches:
-                display_card(m, "302", src302, query, nq.brand)
+                display_card(m, "302", src302, query, nq.brand,
+                             claude_nova=claude_nova, used_claude=result_from_claude)
         else:
             st.markdown(
                 "<div class='result-card' style='text-align:center; color:#94a3b8;'>No matches</div>",
@@ -581,7 +610,8 @@ if query:
         )
         if result.bls40_matches:
             for m in result.bls40_matches:
-                display_card(m, "40", src40, query, nq.brand)
+                display_card(m, "40", src40, query, nq.brand,
+                             claude_nova=claude_nova, used_claude=result_from_claude)
         else:
             st.markdown(
                 "<div class='result-card' style='text-align:center; color:#94a3b8;'>No matches</div>",

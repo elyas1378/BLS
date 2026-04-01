@@ -2,19 +2,17 @@
 FIT Study Food Group & NOVA Classifier
 =======================================
 
-Two-tier classification:
-  1. Lookup table (from reference data) — covers all 1,339 known BLS 3.02 codes
-  2. Rule-based fallback (from BLS code letter patterns) — for unseen codes
-
-Rules derived from 25,291 rows of FIT study reference data.
+Food groups: lookup table (from reference data) + rule-based fallback.
+NOVA: purely rule-based via nova_classifier.py (no reference-data lookups).
 No API calls — entirely free.
 """
 
 from __future__ import annotations
 from modules.food_group_map import (
-    MAIN_GROUP_302, SUB_GROUP_302, NOVA_302,
-    MAIN_GROUP_40, SUB_GROUP_40, NOVA_40,
+    MAIN_GROUP_302, SUB_GROUP_302,
+    MAIN_GROUP_40, SUB_GROUP_40,
 )
+from modules.nova_classifier import classify_nova
 
 
 # ═══════════════════════════════════════════════════════════
@@ -61,22 +59,7 @@ LETTER_TO_SUB = {
     "W": "xx_none",                   # 98.9%
 }
 
-# ═══════════════════════════════════════════════════════════
-#  Rule-based NOVA: letter (+ processing digit where clear)
-#  Only rules with >=70% confidence
-# ═══════════════════════════════════════════════════════════
-
-LETTER_TO_NOVA = {
-    "B": 3,  # 92% NOVA 3
-    "D": 4,  # 65% NOVA 4 (best guess)
-    "F": 1,  # 96% NOVA 1
-    "G": 1,  # 90% NOVA 1
-    "N": 1,  # 93% NOVA 1
-    "P": 3,  # 90% NOVA 3
-    "Q": 2,  # 86% NOVA 2
-    "V": 1,  # 82% NOVA 1
-    "W": 4,  # 91% NOVA 4
-}
+# NOVA classification has moved to modules/nova_classifier.py
 
 
 def _classify_main_E(code: str) -> str:
@@ -145,105 +128,6 @@ def _classify_sub_C(code: str) -> str:
     return "5_1_Bread_cereals"
 
 
-def _nova_fallback(code: str) -> int | None:
-    """NOVA fallback for letters not in LETTER_TO_NOVA."""
-    letter = code[0] if code else ""
-    if letter == "C":
-        return 1  # 76%
-    if letter == "E":
-        if code[1:2] == "1":
-            return 1  # eggs
-        return 1  # pasta — mostly unprocessed
-    if letter == "H":
-        return 1  # 72% NOVA 1
-    if letter == "K":
-        return 1  # 70% NOVA 1
-    if letter == "M":
-        return 3  # 57% NOVA 3 (slight majority)
-    if letter == "R":
-        return 1  # 44% — very mixed, best guess
-    if letter == "S":
-        return 4  # 66%
-    if letter == "T":
-        return 1  # 57%
-    if letter == "U":
-        return 1  # 54%
-    # X, Y: too mixed to assign reliably
-    if letter == "X":
-        return 3  # 48% — slight majority
-    if letter == "Y":
-        return 3  # 38% — very mixed, 3 is safest middle ground
-    return None
-
-
-# ═══════════════════════════════════════════════════════════
-#  Description-based NOVA overrides
-#  Runs AFTER BLS code lookup to correct known wrong cases
-# ═══════════════════════════════════════════════════════════
-
-_NOVA4_KEYWORDS = {
-    "energy drink", "energydrink", "red bull", "cola", "fanta", "sprite",
-    "pepsi", "chips", "pringles", "snickers", "mars", "twix", "oreo",
-    "milka", "haribo", "gummibärchen", "ketchup", "fertiggericht",
-    "tiefkühl", "instant", "mikrowelle", "dosensuppe", "tütensuppe",
-    "cornflakes", "toast",
-}
-
-_NOVA1_KEYWORDS = {
-    "roh", "frisch",
-}
-# NOVA 1 only applies when combined with these food-group letters
-_NOVA1_LETTERS = {"F", "G", "V", "U", "T", "E", "H", "K", "N"}
-
-_NOVA2_KEYWORDS = {
-    "olivenöl", "rapsöl", "butter", "honig", "zucker", "mehl",
-    "essig", "salz", "leinöl", "sonnenblumenöl", "kokosöl", "rapsöl",
-}
-
-
-_NOVA4_BRANDS = {
-    "snickers", "mars", "twix", "milka", "oreo", "pringles", "red bull",
-    "fanta", "pepsi", "coca cola", "coca-cola", "sprite", "haribo", "maggi",
-    "duplo", "hanuta", "knoppers", "ferrero", "kinder", "corny", "maoam",
-    "ritter sport", "chio", "vitalis", "bionade", "wagner", "schweppes",
-    "magnum", "froop", "knorr",
-}
-
-
-def _nova_override(nova: int | None, food_desc: str | None,
-                   brand: str | None, code: str | None) -> int | None:
-    """Apply description-based NOVA overrides on top of code-based NOVA."""
-    if food_desc is None:
-        return nova
-
-    lower = food_desc.lower().strip()
-    letter = code[0].upper() if code else ""
-
-    # Rule 1: only confirmed ultra-processed brands → NOVA 4
-    # Cheese brands (gruyère, leerdammer, bergader, philadelphia),
-    # dairy brands (alpro, alnatura, landliebe, kölln), and
-    # meat brands (rügenwalder) keep their lookup-table NOVA.
-    if brand is not None and brand in _NOVA4_BRANDS:
-        return 4
-
-    # Rule 2: NOVA 4 keywords
-    for kw in _NOVA4_KEYWORDS:
-        if kw in lower:
-            return 4
-
-    # Rule 3: NOVA 2 keywords (processed culinary ingredients)
-    for kw in _NOVA2_KEYWORDS:
-        if kw in lower:
-            return 2
-
-    # Rule 4: NOVA 1 keywords (only for raw foods in appropriate groups)
-    if letter in _NOVA1_LETTERS:
-        for kw in _NOVA1_KEYWORDS:
-            if kw in lower:
-                return 1
-
-    return nova
-
 
 # ═══════════════════════════════════════════════════════════
 #  Public API
@@ -272,52 +156,35 @@ def classify(code: str, bls_version: str = "302",
     if not code or len(code) < 2:
         return {"main_group": None, "sub_group": None, "nova": None, "source": None}
 
-    # Tier 1: lookup table
+    # ── Food group: lookup table then rule-based fallback ──
     if bls_version == "302":
         main = MAIN_GROUP_302.get(code)
         sub = SUB_GROUP_302.get(code)
-        nova = NOVA_302.get(code)
     else:
         main = MAIN_GROUP_40.get(code)
         sub = SUB_GROUP_40.get(code)
-        nova = NOVA_40.get(code)
 
-    if main is not None:
-        nova = _nova_override(nova, food_desc, brand, code)
-        return {"main_group": main, "sub_group": sub, "nova": nova, "source": "lookup"}
+    source = "lookup" if main is not None else "rule"
 
-    # Tier 2: rule-based fallback
-    letter = code[0].upper()
+    if main is None:
+        letter = code[0].upper()
+        if letter == "E":
+            main = _classify_main_E(code)
+        elif letter == "H":
+            main = _classify_main_H(code)
+        elif letter in ("X", "Y"):
+            main = None
+        else:
+            main = LETTER_TO_MAIN.get(letter)
 
-    # Main group
-    if letter == "E":
-        main = _classify_main_E(code)
-    elif letter == "H":
-        main = _classify_main_H(code)
-    elif letter in ("X", "Y"):
-        main = None  # too mixed — can't reliably classify
-    else:
-        main = LETTER_TO_MAIN.get(letter)
+        sub_fn = {
+            "C": _classify_sub_C, "E": _classify_sub_E, "H": _classify_sub_H,
+            "N": _classify_sub_N, "P": _classify_sub_P, "Q": _classify_sub_Q,
+        }.get(letter)
+        sub = sub_fn(code) if sub_fn else LETTER_TO_SUB.get(letter)
 
-    # Sub group
-    sub_fn = {
-        "C": _classify_sub_C,
-        "E": _classify_sub_E,
-        "H": _classify_sub_H,
-        "N": _classify_sub_N,
-        "P": _classify_sub_P,
-        "Q": _classify_sub_Q,
-    }.get(letter)
-    if sub_fn:
-        sub = sub_fn(code)
-    else:
-        sub = LETTER_TO_SUB.get(letter)
+    # ── NOVA: Layer 1 (code structure) + Layer 2 (description overrides) ──
+    nova_result = classify_nova(code, bls_version, food_desc or "", brand)
+    nova = nova_result["nova"]
 
-    # NOVA
-    nova = LETTER_TO_NOVA.get(letter)
-    if nova is None:
-        nova = _nova_fallback(code)
-
-    nova = _nova_override(nova, food_desc, brand, code)
-
-    return {"main_group": main, "sub_group": sub, "nova": nova, "source": "rule"}
+    return {"main_group": main, "sub_group": sub, "nova": nova, "source": source}
