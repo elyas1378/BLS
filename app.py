@@ -407,14 +407,16 @@ st.markdown("""<div class="app-header">
 
 with st.sidebar:
     st.markdown("### API Configuration")
-    use_claude = st.toggle("Claude API re-ranking", value=True,
-        help="Claude re-ranks candidates for higher accuracy (~$0.02 per new query, free from cache).")
-    default_key = ""
+    _api_key = ""
     try:
-        default_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+        _api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     except Exception:
-        default_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    api_key_input = st.text_input("Anthropic API Key", value=default_key, type="password")
+        _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    use_claude = st.toggle("Claude API re-ranking", value=bool(_api_key),
+        help="Claude re-ranks candidates for higher accuracy (~$0.02 per new query, free from cache).")
+    if use_claude and not _api_key:
+        st.warning("API key not configured. Claude re-ranking disabled.")
+        use_claude = False
 
     st.markdown("---")
     st.markdown("### Matching Pipeline")
@@ -475,8 +477,8 @@ if query:
     result = None
     result_from_claude = False
 
-    if use_claude and api_key_input:
-        reranker = get_reranker(api_key_input)
+    if use_claude and _api_key:
+        reranker = get_reranker(_api_key)
         if reranker:
             skip_cache = (st.session_state.requery_food == query)
             if skip_cache:
