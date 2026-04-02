@@ -41,23 +41,51 @@ st.set_page_config(
 # ── Global CSS ──
 st.markdown("""
 <style>
-    /* Header bar */
-    .app-header {
-        background: linear-gradient(135deg, #1e3a5f 0%, #2d5986 100%);
-        color: white;
-        padding: 1.5rem 2rem;
-        border-radius: 8px;
-        margin-bottom: 1.5rem;
+    /* Centered header */
+    .app-header-new {
+        text-align: center;
+        padding: 2rem 0 1rem;
     }
-    .app-header h1 {
-        margin: 0; font-size: 1.6rem; font-weight: 700; color: white;
+    .app-logo {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: #1D9E75; color: white;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 18px; font-weight: 600;
+        margin-bottom: 0.75rem;
     }
-    .app-header p {
-        margin: 0.3rem 0 0 0; font-size: 0.9rem; opacity: 0.85; color: #cbd5e1;
+    .app-title {
+        font-size: 22px; font-weight: 500; color: #1e293b;
+        margin: 0 0 0.25rem;
     }
-    .app-header .institution {
-        margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.7; color: #94a3b8;
-        border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.5rem;
+    .app-subtitle {
+        font-size: 12px; color: #9ca3af; margin: 0 0 2rem;
+    }
+
+    /* Google-style search bar */
+    div[data-testid="stTextInput"] > div {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    div[data-testid="stTextInput"] input {
+        border-radius: 24px !important;
+        border: 1px solid #e5e7eb !important;
+        padding: 12px 20px !important;
+        font-size: 15px !important;
+    }
+    div[data-testid="stTextInput"] input:focus {
+        border-color: #1D9E75 !important;
+        box-shadow: 0 0 0 2px rgba(29, 158, 117, 0.1) !important;
+    }
+    .search-hint {
+        text-align: center; font-size: 12px; color: #9ca3af;
+        margin-top: 8px;
+    }
+    .try-examples {
+        text-align: center; font-size: 12px; margin-top: 4px;
+        color: #9ca3af;
+    }
+    .try-examples span {
+        color: #1D9E75; cursor: default;
     }
 
     /* Result cards */
@@ -117,12 +145,6 @@ st.markdown("""
     .summary-table th { background: #f1f5f9; font-size: 0.8rem; }
     .summary-table td { font-size: 0.85rem; }
 
-    /* Footer */
-    .app-footer {
-        text-align: center; padding: 1rem 0; color: #94a3b8;
-        font-size: 0.78rem; border-top: 1px solid #e2e8f0; margin-top: 2rem;
-    }
-    .app-footer a { color: #64748b; text-decoration: none; }
 
     /* Sidebar tweaks */
     section[data-testid="stSidebar"] {
@@ -494,10 +516,10 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
 #  Header
 # ═══════════════════════════════════════════════════════════
 
-st.markdown("""<div class="app-header">
-    <h1>BLS Food Code Matcher</h1>
-    <p>Automated mapping of free-text food descriptions to BLS 3.02 and BLS 4.0 codes with food group and NOVA classification</p>
-    <div class="institution">Hector-Center for Nutrition, Exercise and Sports &mdash; University Hospital Erlangen</div>
+st.markdown("""<div class="app-header-new">
+    <div class="app-logo">B</div>
+    <div class="app-title">BLS Food Code Matcher</div>
+    <div class="app-subtitle">Hector-Center for Nutrition, Exercise and Sports &middot; University Hospital Erlangen</div>
 </div>""", unsafe_allow_html=True)
 
 
@@ -548,15 +570,6 @@ with st.sidebar:
         f'<div class="cache-label">calls</div></div>'
         f'</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
-
-    st.markdown(
-        "<div style='font-size:0.78rem; color:#94a3b8;'>"
-        "<b>Try:</b> Haferflocken, Spiegelei, Chicken salad, "
-        "Magnum Mandel, Joghurt 3,5% Fett, Kimchi, Kürbispesto"
-        "</div>", unsafe_allow_html=True
-    )
-
     # Unmatched foods list
     if st.session_state.unmatched_foods:
         st.markdown("---")
@@ -580,16 +593,21 @@ with st.spinner("Loading BLS catalogs..."):
 
 query = st.text_input(
     "Food description",
-    placeholder="Enter a food description, e.g. Haferflocken, Spiegelei, Döner ...",
+    placeholder="Search for a food item... e.g. Haferflocken, Döner, Chicken salad",
     key="food_query",
     label_visibility="collapsed",
 )
 
-# Subtle search prompt when empty
+# Hint + examples below search bar
 if not query:
     st.markdown(
-        "<p style='color:#94a3b8; font-size:0.9rem; margin-top:-0.5rem;'>"
-        "Enter a food description as written by a study participant.</p>",
+        '<div class="search-hint">'
+        'Enter a food description as written by a study participant</div>'
+        '<div class="try-examples">'
+        'Try: <span>Haferflocken</span> · <span>Spiegelei</span> · '
+        '<span>Chicken salad</span> · <span>Döner</span> · '
+        '<span>Vollkornbrot</span> · <span>Magnum Mandel</span>'
+        '</div>',
         unsafe_allow_html=True,
     )
 
@@ -765,15 +783,3 @@ if query:
                 st.text(f"{i:2d}. [{cd['code']}] {cd['name_de'][:55]:<55s} score={cd['score']:.3f}")
 
 
-# ═══════════════════════════════════════════════════════════
-#  Footer
-# ═══════════════════════════════════════════════════════════
-
-st.markdown(
-    "<div class='app-footer'>"
-    "Developed by Elias Adibi&ensp;|&ensp;"
-    "Hector-Center for Nutrition, Exercise and Sports&ensp;|&ensp;"
-    "University Hospital Erlangen"
-    "</div>",
-    unsafe_allow_html=True,
-)
