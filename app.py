@@ -176,6 +176,7 @@ st.markdown("""
         font-size: 20px; font-weight: 600; color: #1d1d1f;
         letter-spacing: -0.02em;
     }
+    .rc-header-left { flex: 1; min-width: 0; }
     .rc-food-meta { font-size: 13px; color: #86868b; margin-top: 4px; }
     .rc-header-right {
         display: flex; gap: 6px; align-items: center; flex-shrink: 0;
