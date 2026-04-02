@@ -260,6 +260,11 @@ _NOVA4_FROZEN = {
     "backfisch", "schlemmerfilet", "cordon bleu",
 }
 
+_NOVA4_FAST_FOOD = {
+    "döner", "kebab", "gyros", "big mac", "hamburger", "cheeseburger",
+    "hot dog", "hotdog", "burrito", "wrap", "frühlingsrolle",
+}
+
 _NOVA4_CEREAL = {
     "schokomüsli",
 }
@@ -410,6 +415,11 @@ def _layer2_description_override(layer1: dict, bls_code: str,
         if kw in lower:
             return _result(4, 0.85, "description_override",
                            f"keyword '{kw}' → NOVA 4 (frozen/convenience)")
+
+    for kw in _NOVA4_FAST_FOOD:
+        if kw in lower:
+            return _result(4, 0.85, "description_override",
+                           f"keyword '{kw}' → NOVA 4 (fast food)")
 
     for kw in _NOVA4_CEREAL:
         if kw in lower:
