@@ -55,6 +55,11 @@ st.markdown("""
         margin: 0 auto !important;
     }
 
+    /* Page background */
+    .stApp {
+        background: #fafafa !important;
+    }
+
     /* Landing hero */
     .search-hero {
         text-align: center;
@@ -62,20 +67,22 @@ st.markdown("""
         margin-bottom: 0;
     }
     .hero-title {
-        font-size: 46px;
-        font-weight: 700;
+        font-size: 44px;
+        font-weight: 600;
         font-style: normal !important;
         color: #1d1d1f;
-        letter-spacing: -0.04em;
-        line-height: 1.08;
-        margin: 0 0 12px;
+        letter-spacing: -0.03em;
+        line-height: 1.12;
+        margin: 0 0 14px;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
     }
     .hero-sub {
-        font-size: 18px;
+        font-size: 16px;
         color: #86868b;
         font-weight: 400;
-        line-height: 1.5;
+        line-height: 1.6;
         margin: 0 0 44px;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
     }
 
     /* Apple-style search bar */
@@ -88,11 +95,13 @@ st.markdown("""
         border: none !important;
         border-color: transparent !important;
         outline: none !important;
-        border-radius: 12px !important;
-        padding: 16px 20px !important;
-        font-size: 17px !important;
+        border-radius: 14px !important;
+        padding: 16px 22px !important;
+        font-size: 16px !important;
         color: #1d1d1f !important;
-        box-shadow: none !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+        transition: all 0.2s ease;
     }
     div[data-testid="stTextInput"] input::placeholder {
         color: #86868b !important;
@@ -100,8 +109,7 @@ st.markdown("""
     div[data-testid="stTextInput"] input:focus {
         background: #f0f0f2 !important;
         border: none !important;
-        border-color: transparent !important;
-        box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.15) !important;
+        box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12) !important;
     }
 
     /* Claude-style pills */
@@ -113,17 +121,20 @@ st.markdown("""
         margin-top: 28px;
     }
     .hero-pill {
-        background: rgba(29, 158, 117, 0.06);
+        background: rgba(29, 158, 117, 0.05);
         color: #1a7a5a;
         font-size: 13px;
         padding: 7px 16px;
         border-radius: 10px;
         font-weight: 500;
         cursor: pointer;
-        border: 1px solid rgba(29, 158, 117, 0.1);
+        border: 1px solid rgba(29, 158, 117, 0.08);
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+        transition: all 0.2s ease;
     }
     .hero-pill:hover {
-        background: rgba(29, 158, 117, 0.12);
+        background: rgba(29, 158, 117, 0.10);
+        border-color: rgba(29, 158, 117, 0.18);
     }
 
     /* Footer */
@@ -134,7 +145,8 @@ st.markdown("""
         justify-content: center;
         gap: 6px;
         font-size: 11px;
-        color: #b5b0a8;
+        color: #c7c7cc;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
     }
     .hero-dot {
         width: 5px;
