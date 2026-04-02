@@ -251,6 +251,27 @@ st.markdown("""
     }
     .rc-source { font-size: 12px; color: #86868b; }
 
+    /* Small action buttons row */
+    .action-row {
+        display: flex; justify-content: flex-end; align-items: center;
+        gap: 8px; margin-top: -8px; margin-bottom: 12px;
+    }
+    .action-row .stButton > button {
+        font-size: 12px !important;
+        padding: 4px 16px !important;
+        min-height: 0 !important;
+        height: auto !important;
+        line-height: 1.4 !important;
+        border-radius: 8px !important;
+        border: 0.5px solid #e5e5ea !important;
+        color: #86868b !important;
+        background: transparent !important;
+        white-space: nowrap !important;
+    }
+    .action-row .stButton > button:hover {
+        background: #f5f5f7 !important;
+        color: #1d1d1f !important;
+    }
 
 </style>
 """, unsafe_allow_html=True)
@@ -453,9 +474,6 @@ def render_result_card(query_text, nq, result, flag, src302, src40,
         f'</div>'
         f'{warnings_html}'
         f'<div class="rc-grid">{col302_html}{col40_html}</div>'
-        f'<div class="rc-footer">'
-        f'<span class="rc-source">{source_text}</span>'
-        f'</div>'
         f'</div>'
     )
     st.markdown(html, unsafe_allow_html=True)
@@ -658,41 +676,48 @@ if query:
                        claude_nova=claude_nova, used_claude=result_from_claude,
                        source_text=source_text)
 
-    # ── Action buttons ──
-    btn_cols = st.columns([6, 1, 1])
-    with btn_cols[1]:
-        has_cached = src302 == "cached" or src40 == "cached"
-        if has_cached:
-            if st.button("Re-query", key="requery_btn", type="secondary"):
-                st.session_state.requery_food = query
-                st.rerun()
-    with btn_cols[2]:
-        already_flagged = query in st.session_state.flagged_this_session
-        if already_flagged:
-            st.markdown("<span style='font-size:12px; color:#34c759;'>Flagged ✓</span>",
+    # ── Action row (source + buttons, right-aligned) ──
+    has_cached = src302 == "cached" or src40 == "cached"
+    already_flagged = query in st.session_state.flagged_this_session
+
+    with st.container():
+        st.markdown('<div class="action-row">', unsafe_allow_html=True)
+        act_cols = st.columns([5, 1, 1])
+        with act_cols[0]:
+            st.markdown(f'<span style="font-size:12px; color:#86868b;">{source_text}</span>',
                         unsafe_allow_html=True)
-        else:
-            if st.button("Flag", key="flag_btn", type="secondary"):
-                from datetime import datetime
-                m302 = result.bls302_matches or []
-                m40 = result.bls40_matches or []
-                nova_val = None
-                if m302:
-                    nova_val, _ = resolve_nova(m302[0].code, "302", query, nq.brand,
-                                              claude_nova, result_from_claude)
-                save_flag({
-                    "timestamp": datetime.now().isoformat(),
-                    "food_description": query,
-                    "normalized_name": nq.cleaned,
-                    "bls302_code": m302[0].code if m302 else None,
-                    "bls302_name": m302[0].name if m302 else None,
-                    "bls40_code": m40[0].code if m40 else None,
-                    "bls40_name": m40[0].name if m40 else None,
-                    "nova_score": nova_val,
-                    "source": source_text,
-                })
-                st.session_state.flagged_this_session.add(query)
-                st.rerun()
+        with act_cols[1]:
+            if has_cached:
+                if st.button("Re-query", key="requery_btn", type="secondary"):
+                    st.session_state.requery_food = query
+                    st.rerun()
+        with act_cols[2]:
+            if already_flagged:
+                st.markdown('<span style="font-size:12px; color:#34c759;">Flagged ✓</span>',
+                            unsafe_allow_html=True)
+            else:
+                if st.button("Flag", key="flag_btn", type="secondary"):
+                    from datetime import datetime
+                    m302 = result.bls302_matches or []
+                    m40 = result.bls40_matches or []
+                    nova_val = None
+                    if m302:
+                        nova_val, _ = resolve_nova(m302[0].code, "302", query, nq.brand,
+                                                  claude_nova, result_from_claude)
+                    save_flag({
+                        "timestamp": datetime.now().isoformat(),
+                        "food_description": query,
+                        "normalized_name": nq.cleaned,
+                        "bls302_code": m302[0].code if m302 else None,
+                        "bls302_name": m302[0].name if m302 else None,
+                        "bls40_code": m40[0].code if m40 else None,
+                        "bls40_name": m40[0].name if m40 else None,
+                        "nova_score": nova_val,
+                        "source": source_text,
+                    })
+                    st.session_state.flagged_this_session.add(query)
+                    st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ── More matches (2nd and 3rd choices) ──
     m302 = result.bls302_matches or []
