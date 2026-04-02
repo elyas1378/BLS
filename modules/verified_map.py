@@ -435,7 +435,6 @@ VERIFIED_MAP_302 = {
     "butterhörnchen": "D771600",
     "meerrettich": "G630800",
     "hartkäse": "M300000",
-    "aroniapulver": "F303400",
     "h-milch 3,5 %": "M110300",
     "wurst": "W000000",
     "flohsamenschalenpulver": "H410500",
