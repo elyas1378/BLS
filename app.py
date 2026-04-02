@@ -41,67 +41,63 @@ st.set_page_config(
 # ── Global CSS ──
 st.markdown("""
 <style>
-    /* Search hero — landing page layout */
-    .search-hero {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding-top: 12vh;
-    }
+    /* Reduce Streamlit default padding */
     .stMainBlockContainer {
         padding-top: 1rem !important;
     }
 
-    /* Centered header */
-    .app-header-new {
+    /* Landing page hero */
+    .search-hero {
         text-align: center;
-        padding: 0 0 0.5rem;
+        padding-top: 8vh;
+        margin-bottom: 1.5rem;
     }
-    .app-logo {
-        width: 52px; height: 52px; border-radius: 50%;
+    .app-logo-sq {
+        width: 56px; height: 56px; border-radius: 14px;
         background: #1D9E75; color: white;
         display: inline-flex; align-items: center; justify-content: center;
-        font-size: 26px; font-weight: 600;
+        font-size: 28px; font-weight: 600;
         margin-bottom: 1rem;
     }
-    .app-title {
-        font-size: 28px; font-weight: 500; color: #1e293b;
-        letter-spacing: 0.01em;
-        margin: 0 0 0.5rem;
+    .app-title-lg {
+        font-size: 32px; font-weight: 600; color: #1e293b;
+        letter-spacing: -0.02em; margin: 0 0 0.4rem;
     }
-    .app-subtitle {
-        font-size: 13px; color: #94a3b8; margin: 0 0 2rem;
+    .app-tagline {
+        font-size: 14px; color: #94a3b8; margin: 0 0 2rem;
+    }
+    .example-pills {
+        display: flex; gap: 8px; justify-content: center;
+        flex-wrap: wrap; margin-top: 1.2rem;
+    }
+    .pill {
+        background: #E1F5EE; color: #085041;
+        font-size: 12px; padding: 5px 14px;
+        border-radius: 20px; cursor: default;
+    }
+    .institution {
+        font-size: 11px; color: #b0b8c4;
+        text-align: center; margin-top: 2rem;
     }
 
-    /* Google-style search bar */
+    /* Search bar — both states */
     div[data-testid="stTextInput"] > div {
-        max-width: 560px;
+        max-width: 640px;
         margin: 0 auto;
     }
     div[data-testid="stTextInput"] input {
         border-radius: 24px !important;
         border: 1.5px solid #d1d5db !important;
-        padding: 14px 24px !important;
+        padding: 16px 24px !important;
         font-size: 16px !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.06) !important;
     }
     div[data-testid="stTextInput"] input:hover {
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.10) !important;
     }
     div[data-testid="stTextInput"] input:focus {
         border-color: #1D9E75 !important;
-        box-shadow: 0 2px 12px rgba(29, 158, 117, 0.12) !important;
-    }
-    .search-hint {
-        text-align: center; font-size: 12px; color: #9ca3af;
-        margin-top: 1rem;
-    }
-    .try-examples {
-        text-align: center; font-size: 12px; margin-top: 0.5rem;
-        color: #9ca3af;
-    }
-    .try-examples span {
-        color: #1D9E75; cursor: default;
+        box-shadow: 0 4px 16px rgba(29, 158, 117, 0.12) !important;
     }
 
     /* Result cards */
@@ -605,39 +601,35 @@ with st.spinner("Loading BLS catalogs..."):
 _has_query = bool(st.session_state.get("food_query", ""))
 
 if not _has_query:
-    # Landing page: open hero wrapper for vertical centering
-    st.markdown('<div class="search-hero">', unsafe_allow_html=True)
-
-# Header
-st.markdown("""<div class="app-header-new">
-    <div class="app-logo">B</div>
-    <div class="app-title">BLS Food Code Matcher</div>
-    <div class="app-subtitle">Hector-Center for Nutrition, Exercise and Sports &middot; University Hospital Erlangen</div>
-</div>""", unsafe_allow_html=True)
+    # STATE 1: Landing page — big centered hero
+    st.markdown("""<div class="search-hero">
+        <div class="app-logo-sq">B</div>
+        <h1 class="app-title-lg">BLS Food Code Matcher</h1>
+        <p class="app-tagline">Map food descriptions to standardized BLS codes</p>
+    </div>""", unsafe_allow_html=True)
 
 query = st.text_input(
     "Food description",
-    placeholder="Search for a food item... e.g. Haferflocken, Döner, Chicken salad",
+    placeholder="Search for a food item...",
     key="food_query",
     label_visibility="collapsed",
 )
 
-# Hint + examples below search bar (landing page only)
 if not query:
     st.markdown(
-        '<div class="search-hint">'
-        'Enter a food description as written by a study participant</div>'
-        '<div class="try-examples">'
-        'Try: <span>Haferflocken</span> · <span>Spiegelei</span> · '
-        '<span>Chicken salad</span> · <span>Döner</span> · '
-        '<span>Vollkornbrot</span> · <span>Magnum Mandel</span>'
-        '</div>',
+        '<div class="example-pills">'
+        '<span class="pill">Haferflocken</span>'
+        '<span class="pill">Spiegelei</span>'
+        '<span class="pill">Chicken salad</span>'
+        '<span class="pill">Döner</span>'
+        '<span class="pill">Vollkornbrot</span>'
+        '<span class="pill">Magnum Mandel</span>'
+        '</div>'
+        '<p class="institution">'
+        'Hector-Center for Nutrition, Exercise and Sports &middot; '
+        'University Hospital Erlangen</p>',
         unsafe_allow_html=True,
     )
-
-if not _has_query:
-    # Close hero wrapper
-    st.markdown('</div>', unsafe_allow_html=True)
 
 if query:
     # Check verified maps — skip expansion if both versions are verified
