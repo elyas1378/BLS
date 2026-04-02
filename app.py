@@ -41,14 +41,15 @@ st.set_page_config(
 # ── Global CSS ──
 st.markdown("""
 <style>
-    /* Search hero — vertical centering on landing page */
+    /* Search hero — landing page layout */
     .search-hero {
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        min-height: 60vh;
-        padding: 0 1rem;
+        padding-top: 12vh;
+    }
+    .stMainBlockContainer {
+        padding-top: 1rem !important;
     }
 
     /* Centered header */
