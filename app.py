@@ -409,20 +409,22 @@ def render_result_card(query_text, nq, result, flag, src302, src40,
     col302_html = _bls_col_html(m302, "BLS 3.02", src302)
     col40_html = _bls_col_html(m40, "BLS 4.0", src40)
 
-    html = f'''<div class="{card_class}">
-        <div class="rc-header">
-            <div class="rc-header-left">
-                <div class="rc-food-name">{query_text}</div>
-                <div class="rc-food-meta">{nq.cleaned}{meta_badge}{brand_badge}</div>
-            </div>
-            <div class="rc-header-right">{nova_html}{fg_html}</div>
-        </div>
-        {warnings_html}
-        <div class="rc-grid">{col302_html}{col40_html}</div>
-        <div class="rc-footer">
-            <span class="rc-source">{source_text}</span>
-        </div>
-    </div>'''
+    html = (
+        f'<div class="{card_class}">'
+        f'<div class="rc-header">'
+        f'<div class="rc-header-left">'
+        f'<div class="rc-food-name">{query_text}</div>'
+        f'<div class="rc-food-meta">{nq.cleaned}{meta_badge}{brand_badge}</div>'
+        f'</div>'
+        f'<div class="rc-header-right">{nova_html}{fg_html}</div>'
+        f'</div>'
+        f'{warnings_html}'
+        f'<div class="rc-grid">{col302_html}{col40_html}</div>'
+        f'<div class="rc-footer">'
+        f'<span class="rc-source">{source_text}</span>'
+        f'</div>'
+        f'</div>'
+    )
     st.markdown(html, unsafe_allow_html=True)
 
 
