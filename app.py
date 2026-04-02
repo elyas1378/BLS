@@ -125,9 +125,32 @@ st.markdown("""
     .app-footer a { color: #64748b; text-decoration: none; }
 
     /* Sidebar tweaks */
-    section[data-testid="stSidebar"] .stMarkdown h3 {
-        font-size: 0.95rem; color: #475569; text-transform: uppercase;
-        letter-spacing: 0.05em; margin-bottom: 0.3rem;
+    section[data-testid="stSidebar"] {
+        padding-top: 1rem;
+    }
+    .sidebar-brand {
+        font-size: 0.75rem; color: #9ca3af; letter-spacing: 0.04em;
+        margin-bottom: 1.2rem; padding-left: 0.2rem;
+    }
+    .ai-status {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 0.85rem; margin-bottom: 0.3rem;
+    }
+    .ai-dot {
+        width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
+    .cache-row {
+        display: flex; justify-content: space-between; text-align: center;
+        margin: 0.5rem 0;
+    }
+    .cache-item {
+        flex: 1;
+    }
+    .cache-num {
+        font-size: 1.6rem; font-weight: 700; color: #334155; line-height: 1.2;
+    }
+    .cache-label {
+        font-size: 0.68rem; color: #9ca3af; text-transform: lowercase;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -483,38 +506,50 @@ st.markdown("""<div class="app-header">
 # ═══════════════════════════════════════════════════════════
 
 with st.sidebar:
-    st.markdown("### API Configuration")
+    st.markdown('<div class="sidebar-brand">BLS Food Code Matcher</div>',
+                unsafe_allow_html=True)
+
+    # ── AI status ──
     _api_key = ""
     try:
         _api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     except Exception:
         _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    use_claude = st.toggle("Claude API re-ranking", value=bool(_api_key),
-        help="Claude re-ranks candidates for higher accuracy (~$0.02 per new query, free from cache).")
+    use_claude = st.toggle("Enable AI matching", value=bool(_api_key),
+        label_visibility="collapsed")
     if use_claude and not _api_key:
-        st.warning("API key not configured. Claude re-ranking disabled.")
+        st.warning("API key not configured.")
         use_claude = False
 
-    st.markdown("---")
-    st.markdown("### Matching Pipeline")
-    st.markdown(
-        "1. Normalize text & expand synonyms\n"
-        "2. Search 14,814 (3.02) + 7,140 (4.0) BLS entries\n"
-        "3. Concept expansion (251 food mappings)\n"
-        "4. Re-rank top candidates\n"
-        "5. Classify food group, sub group & NOVA\n"
-        "6. Cross-version safety check"
-    )
+    if use_claude:
+        st.markdown(
+            '<div class="ai-status">'
+            '<span class="ai-dot" style="background:#1D9E75;"></span>'
+            '<span style="color:#1D9E75; font-weight:500;">AI-powered matching</span>'
+            '</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(
+            '<div class="ai-status">'
+            '<span class="ai-dot" style="background:#d1d5db;"></span>'
+            '<span style="color:#9ca3af;">Basic matching</span>'
+            '</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### Cache Statistics")
+
+    # ── Cache stats ──
     cache = get_cache()
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Entries", cache.size)
-    c2.metric("Hits", st.session_state.cache_hits)
-    c3.metric("API calls", st.session_state.api_calls)
+    st.markdown(
+        f'<div class="cache-row">'
+        f'<div class="cache-item"><div class="cache-num">{cache.size}</div>'
+        f'<div class="cache-label">cached</div></div>'
+        f'<div class="cache-item"><div class="cache-num">{st.session_state.cache_hits}</div>'
+        f'<div class="cache-label">hits</div></div>'
+        f'<div class="cache-item"><div class="cache-num">{st.session_state.api_calls}</div>'
+        f'<div class="cache-label">calls</div></div>'
+        f'</div>', unsafe_allow_html=True)
 
     st.markdown("---")
+
     st.markdown(
         "<div style='font-size:0.78rem; color:#94a3b8;'>"
         "<b>Try:</b> Haferflocken, Spiegelei, Chicken salad, "
@@ -525,9 +560,12 @@ with st.sidebar:
     # Unmatched foods list
     if st.session_state.unmatched_foods:
         st.markdown("---")
-        st.markdown("### Unmatched Foods")
+        st.markdown(
+            "<div style='font-size:0.78rem; color:#9ca3af; margin-bottom:0.3rem;'>"
+            "Unmatched foods</div>", unsafe_allow_html=True)
         for uf in st.session_state.unmatched_foods:
-            st.markdown(f"- {uf}")
+            st.markdown(f"<div style='font-size:0.82rem; color:#6b7280; "
+                        f"padding:2px 0;'>- {uf}</div>", unsafe_allow_html=True)
         if st.button("Clear list", key="clear_unmatched"):
             st.session_state.unmatched_foods = []
             st.rerun()
