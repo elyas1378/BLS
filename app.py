@@ -41,9 +41,12 @@ st.set_page_config(
 # ── Global CSS ──
 st.markdown("""
 <style>
-    /* Hide sidebar */
+    /* Hide sidebar + clean header */
     section[data-testid="stSidebar"] {
         display: none !important;
+    }
+    header[data-testid="stHeader"] {
+        background: transparent !important;
     }
     /* Centered main area */
     .stMainBlockContainer {
@@ -61,6 +64,7 @@ st.markdown("""
     .hero-title {
         font-size: 46px;
         font-weight: 700;
+        font-style: normal !important;
         color: #1d1d1f;
         letter-spacing: -0.04em;
         line-height: 1.08;
@@ -71,21 +75,24 @@ st.markdown("""
         color: #86868b;
         font-weight: 400;
         line-height: 1.5;
-        margin: 0 0 40px;
+        margin: 0 0 44px;
     }
 
     /* Apple-style search bar */
     div[data-testid="stTextInput"] > div {
-        max-width: 580px;
+        max-width: 640px;
         margin: 0 auto;
     }
     div[data-testid="stTextInput"] input {
         background: #f5f5f7 !important;
         border: none !important;
+        border-color: transparent !important;
+        outline: none !important;
         border-radius: 12px !important;
         padding: 16px 20px !important;
         font-size: 17px !important;
         color: #1d1d1f !important;
+        box-shadow: none !important;
     }
     div[data-testid="stTextInput"] input::placeholder {
         color: #86868b !important;
@@ -93,6 +100,7 @@ st.markdown("""
     div[data-testid="stTextInput"] input:focus {
         background: #f0f0f2 !important;
         border: none !important;
+        border-color: transparent !important;
         box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.15) !important;
     }
 
@@ -102,7 +110,7 @@ st.markdown("""
         gap: 8px;
         justify-content: center;
         flex-wrap: wrap;
-        margin-top: 22px;
+        margin-top: 28px;
     }
     .hero-pill {
         background: rgba(29, 158, 117, 0.06);
@@ -120,7 +128,7 @@ st.markdown("""
 
     /* Footer */
     .hero-footer {
-        margin-top: 44px;
+        margin-top: 52px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -563,7 +571,7 @@ _has_query = bool(st.session_state.get("food_query", ""))
 if not _has_query:
     # STATE 1: Landing page — big centered hero
     st.markdown("""<div class="search-hero">
-        <h1 class="hero-title">Search any food.<br>Get the BLS code.</h1>
+        <div class="hero-title">Search any food.<br>Get the BLS code.</div>
         <p class="hero-sub">Type a food name — we'll match it to the<br>BLS nutritional database instantly.</p>
     </div>""", unsafe_allow_html=True)
 
