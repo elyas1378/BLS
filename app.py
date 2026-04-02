@@ -35,14 +35,20 @@ st.set_page_config(
     page_title="BLS Food Code Matcher",
     page_icon="🍽️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ── Global CSS ──
 st.markdown("""
 <style>
-    /* Reduce Streamlit default padding */
+    /* Hide sidebar */
+    section[data-testid="stSidebar"] {
+        display: none !important;
+    }
+    /* Centered main area */
     .stMainBlockContainer {
+        max-width: 900px !important;
+        margin: 0 auto !important;
         padding-top: 1rem !important;
     }
 
@@ -158,34 +164,6 @@ st.markdown("""
     .summary-table td { font-size: 0.85rem; }
 
 
-    /* Sidebar tweaks */
-    section[data-testid="stSidebar"] {
-        padding-top: 1rem;
-    }
-    .sidebar-brand {
-        font-size: 0.75rem; color: #9ca3af; letter-spacing: 0.04em;
-        margin-bottom: 1.2rem; padding-left: 0.2rem;
-    }
-    .ai-status {
-        display: flex; align-items: center; gap: 6px;
-        font-size: 0.85rem; margin-bottom: 0.3rem;
-    }
-    .ai-dot {
-        width: 8px; height: 8px; border-radius: 50%; display: inline-block;
-    }
-    .cache-row {
-        display: flex; justify-content: space-between; text-align: center;
-        margin: 0.5rem 0;
-    }
-    .cache-item {
-        flex: 1;
-    }
-    .cache-num {
-        font-size: 1.6rem; font-weight: 700; color: #334155; line-height: 1.2;
-    }
-    .cache-label {
-        font-size: 0.68rem; color: #9ca3af; text-transform: lowercase;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -530,64 +508,16 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
 
 
 # ═══════════════════════════════════════════════════════════
-#  Sidebar
+#  API key + Claude (silent — no UI)
 # ═══════════════════════════════════════════════════════════
 
-with st.sidebar:
-    st.markdown('<div class="sidebar-brand">BLS Food Code Matcher</div>',
-                unsafe_allow_html=True)
-
-    # ── AI status ──
-    _api_key = ""
-    try:
-        _api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
-    except Exception:
-        _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    use_claude = st.toggle("Enable AI matching", value=bool(_api_key),
-        label_visibility="collapsed")
-    if use_claude and not _api_key:
-        st.warning("API key not configured.")
-        use_claude = False
-
-    if use_claude:
-        st.markdown(
-            '<div class="ai-status">'
-            '<span class="ai-dot" style="background:#1D9E75;"></span>'
-            '<span style="color:#1D9E75; font-weight:500;">AI-powered matching</span>'
-            '</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(
-            '<div class="ai-status">'
-            '<span class="ai-dot" style="background:#d1d5db;"></span>'
-            '<span style="color:#9ca3af;">Basic matching</span>'
-            '</div>', unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # ── Cache stats ──
-    cache = get_cache()
-    st.markdown(
-        f'<div class="cache-row">'
-        f'<div class="cache-item"><div class="cache-num">{cache.size}</div>'
-        f'<div class="cache-label">cached</div></div>'
-        f'<div class="cache-item"><div class="cache-num">{st.session_state.cache_hits}</div>'
-        f'<div class="cache-label">hits</div></div>'
-        f'<div class="cache-item"><div class="cache-num">{st.session_state.api_calls}</div>'
-        f'<div class="cache-label">calls</div></div>'
-        f'</div>', unsafe_allow_html=True)
-
-    # Unmatched foods list
-    if st.session_state.unmatched_foods:
-        st.markdown("---")
-        st.markdown(
-            "<div style='font-size:0.78rem; color:#9ca3af; margin-bottom:0.3rem;'>"
-            "Unmatched foods</div>", unsafe_allow_html=True)
-        for uf in st.session_state.unmatched_foods:
-            st.markdown(f"<div style='font-size:0.82rem; color:#6b7280; "
-                        f"padding:2px 0;'>- {uf}</div>", unsafe_allow_html=True)
-        if st.button("Clear list", key="clear_unmatched"):
-            st.session_state.unmatched_foods = []
-            st.rerun()
+_api_key = ""
+try:
+    _api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+except Exception:
+    _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+use_claude = bool(_api_key)
+cache = get_cache()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -802,4 +732,11 @@ if query:
                 cd = c.to_dict() if hasattr(c, "to_dict") else c
                 st.text(f"{i:2d}. [{cd['code']}] {cd['name_de'][:55]:<55s} score={cd['score']:.3f}")
 
-
+    # ── Unmatched foods (in main area) ──
+    if st.session_state.unmatched_foods:
+        with st.expander(f"Unmatched foods ({len(st.session_state.unmatched_foods)})", expanded=False):
+            for uf in st.session_state.unmatched_foods:
+                st.markdown(f"- {uf}")
+            if st.button("Clear list", key="clear_unmatched"):
+                st.session_state.unmatched_foods = []
+                st.rerun()
