@@ -158,12 +158,13 @@ st.markdown("""
 
     /* Result card */
     .result-card-new {
-        background: #ffffff;
+        background: #ffffff !important;
         border-radius: 16px;
         border: 0.5px solid #e5e5ea;
         padding: 24px 28px;
         margin-bottom: 16px;
         font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     }
     .result-card-new.warning-orange { border-left: 3px solid #ff9500; }
     .result-card-new.warning-red { border-left: 3px solid #ff3b30; }
@@ -269,7 +270,7 @@ def load_text_retriever():
     return TextMatchRetriever(verbose=False)
 
 for key, default in [("cache_hits", 0), ("api_calls", 0), ("requery_food", None),
-                     ("unmatched_foods", [])]:
+                     ("unmatched_foods", []), ("flagged_this_session", set())]:
     if key not in st.session_state:
         st.session_state[key] = default
 
@@ -277,6 +278,37 @@ for key, default in [("cache_hits", 0), ("api_calls", 0), ("requery_food", None)
 # ═══════════════════════════════════════════════════════════
 #  Helpers
 # ═══════════════════════════════════════════════════════════
+
+FLAG_FILE = Path(__file__).resolve().parent / "cache" / "flagged_results.json"
+
+
+def save_flag(entry: dict):
+    """Append a flagged result to the JSON log."""
+    import json
+    FLAG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    flags = []
+    if FLAG_FILE.exists():
+        try:
+            with open(FLAG_FILE, "r", encoding="utf-8") as f:
+                flags = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            flags = []
+    flags.append(entry)
+    with open(FLAG_FILE, "w", encoding="utf-8") as f:
+        json.dump(flags, f, ensure_ascii=False, indent=1)
+
+
+def load_flags() -> list[dict]:
+    """Load all flagged results."""
+    import json
+    if FLAG_FILE.exists():
+        try:
+            with open(FLAG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return []
+    return []
+
 
 def get_expander(api_key):
     if not api_key:
@@ -382,7 +414,8 @@ def render_result_card(query_text, nq, result, flag, src302, src40,
         nova, _ = resolve_nova(m302[0].code, "302", query_text, nq.brand, claude_nova, used_claude)
     nova_cls = f"rc-nova-{nova}" if nova else ""
     nova_html = f'<span class="rc-nova {nova_cls}">NOVA {nova}</span>' if nova else ""
-    fg = (cls.get("main_group") or "").replace("_", " ")
+    fg_raw = (cls.get("main_group") or "").replace("_", " ")
+    fg = re.sub(r'^\d+\s*', '', fg_raw)  # strip leading "11 " etc.
     fg_html = f'<span class="rc-foodgroup">{fg}</span>' if fg and fg != "—" else ""
 
     # Source badge
@@ -625,12 +658,41 @@ if query:
                        claude_nova=claude_nova, used_claude=result_from_claude,
                        source_text=source_text)
 
-    # ── Re-query button ──
-    has_cached = src302 == "cached" or src40 == "cached"
-    if has_cached:
-        if st.button("Re-query", key="requery_btn", type="secondary"):
-            st.session_state.requery_food = query
-            st.rerun()
+    # ── Action buttons ──
+    btn_cols = st.columns([6, 1, 1])
+    with btn_cols[1]:
+        has_cached = src302 == "cached" or src40 == "cached"
+        if has_cached:
+            if st.button("Re-query", key="requery_btn", type="secondary"):
+                st.session_state.requery_food = query
+                st.rerun()
+    with btn_cols[2]:
+        already_flagged = query in st.session_state.flagged_this_session
+        if already_flagged:
+            st.markdown("<span style='font-size:12px; color:#34c759;'>Flagged ✓</span>",
+                        unsafe_allow_html=True)
+        else:
+            if st.button("Flag", key="flag_btn", type="secondary"):
+                from datetime import datetime
+                m302 = result.bls302_matches or []
+                m40 = result.bls40_matches or []
+                nova_val = None
+                if m302:
+                    nova_val, _ = resolve_nova(m302[0].code, "302", query, nq.brand,
+                                              claude_nova, result_from_claude)
+                save_flag({
+                    "timestamp": datetime.now().isoformat(),
+                    "food_description": query,
+                    "normalized_name": nq.cleaned,
+                    "bls302_code": m302[0].code if m302 else None,
+                    "bls302_name": m302[0].name if m302 else None,
+                    "bls40_code": m40[0].code if m40 else None,
+                    "bls40_name": m40[0].name if m40 else None,
+                    "nova_score": nova_val,
+                    "source": source_text,
+                })
+                st.session_state.flagged_this_session.add(query)
+                st.rerun()
 
     # ── More matches (2nd and 3rd choices) ──
     m302 = result.bls302_matches or []
@@ -674,3 +736,20 @@ if query:
             if st.button("Clear list", key="clear_unmatched"):
                 st.session_state.unmatched_foods = []
                 st.rerun()
+
+# ═══════════════════════════════════════════════════════════
+#  Admin view (?admin=true)
+# ═══════════════════════════════════════════════════════════
+
+if st.query_params.get("admin") == "true":
+    st.markdown("---")
+    st.markdown("#### Flagged Results")
+    flags = load_flags()
+    if not flags:
+        st.info("No flagged results yet.")
+    else:
+        df_flags = pd.DataFrame(flags)
+        st.dataframe(df_flags, use_container_width=True)
+        csv = df_flags.to_csv(index=False).encode("utf-8")
+        st.download_button("Download flags as CSV", csv,
+                           "flagged_results.csv", "text/csv")
