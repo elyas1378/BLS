@@ -47,63 +47,93 @@ st.markdown("""
     }
     /* Centered main area */
     .stMainBlockContainer {
+        padding-top: 1rem !important;
         max-width: 900px !important;
         margin: 0 auto !important;
-        padding-top: 1rem !important;
     }
 
-    /* Landing page hero */
+    /* Landing hero */
     .search-hero {
         text-align: center;
-        padding-top: 8vh;
-        margin-bottom: 1.5rem;
+        padding-top: 10vh;
+        margin-bottom: 0;
     }
-    .app-logo-sq {
-        width: 56px; height: 56px; border-radius: 14px;
-        background: #1D9E75; color: white;
-        display: inline-flex; align-items: center; justify-content: center;
-        font-size: 28px; font-weight: 600;
-        margin-bottom: 1rem;
+    .hero-title {
+        font-size: 46px;
+        font-weight: 700;
+        color: #1d1d1f;
+        letter-spacing: -0.04em;
+        line-height: 1.08;
+        margin: 0 0 12px;
     }
-    .app-title-lg {
-        font-size: 32px; font-weight: 600; color: #1e293b;
-        letter-spacing: -0.02em; margin: 0 0 0.4rem;
-    }
-    .app-tagline {
-        font-size: 14px; color: #94a3b8; margin: 0 0 2rem;
-    }
-    .example-pills {
-        display: flex; gap: 8px; justify-content: center;
-        flex-wrap: wrap; margin-top: 1.2rem;
-    }
-    .pill {
-        background: #E1F5EE; color: #085041;
-        font-size: 12px; padding: 5px 14px;
-        border-radius: 20px; cursor: default;
-    }
-    .institution {
-        font-size: 11px; color: #b0b8c4;
-        text-align: center; margin-top: 2rem;
+    .hero-sub {
+        font-size: 18px;
+        color: #86868b;
+        font-weight: 400;
+        line-height: 1.5;
+        margin: 0 0 40px;
     }
 
-    /* Search bar — both states */
+    /* Apple-style search bar */
     div[data-testid="stTextInput"] > div {
-        max-width: 640px;
+        max-width: 580px;
         margin: 0 auto;
     }
     div[data-testid="stTextInput"] input {
-        border-radius: 24px !important;
-        border: 1.5px solid #d1d5db !important;
-        padding: 16px 24px !important;
-        font-size: 16px !important;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.06) !important;
+        background: #f5f5f7 !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 16px 20px !important;
+        font-size: 17px !important;
+        color: #1d1d1f !important;
     }
-    div[data-testid="stTextInput"] input:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,0.10) !important;
+    div[data-testid="stTextInput"] input::placeholder {
+        color: #86868b !important;
     }
     div[data-testid="stTextInput"] input:focus {
-        border-color: #1D9E75 !important;
-        box-shadow: 0 4px 16px rgba(29, 158, 117, 0.12) !important;
+        background: #f0f0f2 !important;
+        border: none !important;
+        box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.15) !important;
+    }
+
+    /* Claude-style pills */
+    .hero-pills {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 22px;
+    }
+    .hero-pill {
+        background: rgba(29, 158, 117, 0.06);
+        color: #1a7a5a;
+        font-size: 13px;
+        padding: 7px 16px;
+        border-radius: 10px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid rgba(29, 158, 117, 0.1);
+    }
+    .hero-pill:hover {
+        background: rgba(29, 158, 117, 0.12);
+    }
+
+    /* Footer */
+    .hero-footer {
+        margin-top: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #b5b0a8;
+    }
+    .hero-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #1D9E75;
+        display: inline-block;
     }
 
     /* Result cards */
@@ -533,31 +563,31 @@ _has_query = bool(st.session_state.get("food_query", ""))
 if not _has_query:
     # STATE 1: Landing page — big centered hero
     st.markdown("""<div class="search-hero">
-        <div class="app-logo-sq">B</div>
-        <h1 class="app-title-lg">BLS Food Code Matcher</h1>
-        <p class="app-tagline">Map food descriptions to standardized BLS codes</p>
+        <h1 class="hero-title">Search any food.<br>Get the BLS code.</h1>
+        <p class="hero-sub">Type a food name — we'll match it to the<br>BLS nutritional database instantly.</p>
     </div>""", unsafe_allow_html=True)
 
 query = st.text_input(
     "Food description",
-    placeholder="Search for a food item...",
+    placeholder="Haferflocken, Döner, Chicken salad...",
     key="food_query",
     label_visibility="collapsed",
 )
 
 if not query:
     st.markdown(
-        '<div class="example-pills">'
-        '<span class="pill">Haferflocken</span>'
-        '<span class="pill">Spiegelei</span>'
-        '<span class="pill">Chicken salad</span>'
-        '<span class="pill">Döner</span>'
-        '<span class="pill">Vollkornbrot</span>'
-        '<span class="pill">Magnum Mandel</span>'
+        '<div class="hero-pills">'
+        '<span class="hero-pill">Haferflocken</span>'
+        '<span class="hero-pill">Döner</span>'
+        '<span class="hero-pill">Chicken salad</span>'
+        '<span class="hero-pill">Vollkornbrot</span>'
+        '<span class="hero-pill">Magnum Mandel</span>'
         '</div>'
-        '<p class="institution">'
-        'Hector-Center for Nutrition, Exercise and Sports &middot; '
-        'University Hospital Erlangen</p>',
+        '<div class="hero-footer">'
+        '<span class="hero-dot"></span>'
+        '<span>Hector-Center for Nutrition, Exercise and Sports &middot; '
+        'University Hospital Erlangen</span>'
+        '</div>',
         unsafe_allow_html=True,
     )
 
