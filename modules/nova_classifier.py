@@ -69,10 +69,14 @@ def _layer1_code_structure(bls_code: str) -> dict:
     if letter == "N":
         second = bls_code[1:2]
         if second in ("1", "2"):
-            return _result(1, 0.90, "code_structure", "N1/N2 = Water/tea")
-        if second == "3":
-            return _result(1, 0.90, "code_structure", "N3 = Coffee")
-        return _result(4, 0.75, "code_structure", "N4+ = Soft drinks")
+            return _result(1, 0.90, "code_structure", "N1/N2 = Water/mineral water")
+        if second in ("3",):
+            return _result(4, 0.80, "code_structure", "N3 = Soft drinks/juices")
+        if second in ("4", "5"):
+            return _result(1, 0.85, "code_structure", "N4/N5 = Coffee")
+        if second in ("6", "7"):
+            return _result(1, 0.85, "code_structure", "N6/N7 = Tea")
+        return _result(4, 0.70, "code_structure", "N8+ = Other beverages")
     if letter == "V":
         return _result(1, 0.85, "code_structure", "V = Raw meat/poultry")
     if letter == "T":
@@ -139,15 +143,34 @@ _CLEAN_BRANDS = {
 # -- Priority 2: NOVA 1 keywords --
 
 _NOVA1_WHOLE_WORDS = {
-    "roh", "frisch", "natur",
-    "haferflocken", "oatmeal",
-    "linsen", "bohnen", "erbsen",
+    "roh", "natur",
+    "haferflocken", "oatmeal", "haferkleie", "porridge", "buchweizen",
+    "dinkelflocken", "weizenkeime", "bulgur",
     "hühnerei", "vollei",
-    "apfel", "banane", "birne", "traube",
-    "tomate", "gurke", "karotte", "möhre", "brokkoli", "spinat",
+    "banane", "birne",
+    "tomate", "karotte", "möhre", "brokkoli", "spinat",
     "wasser", "mineralwasser",
     "magerquark",
     "naturjoghurt", "joghurt natur", "skyr natur",
+    "kakaonibs",
+    "ingwer",
+}
+
+# Plain dairy → NOVA 1 (M-code items that are minimally processed)
+_NOVA1_DAIRY = {
+    "joghurt", "skyr", "kefir", "sahne", "schmand", "buttermilch",
+    "ayran", "creme fraiche", "saure sahne",
+    "griechischer joghurt",
+}
+# Dairy blocked compounds (flavored/processed dairy stays NOVA 3+)
+_NOVA1_DAIRY_BLOCKED = {
+    "fruchtjoghurt", "sahnejoghurt", "trinkjoghurt", "joghurtdressing",
+    "sahnesoße", "sahnejoghurt",
+}
+
+# "frisch" blocked in compound words
+_NOVA1_FRISCH_BLOCKED = {
+    "frischkäse", "kräuterfrischkäse", "frischkäsezubereitung",
 }
 
 # Short words that need word-boundary checking to avoid false matches
@@ -156,7 +179,11 @@ _NOVA1_SHORT_WORDS = {"ei", "eier"}
 # "milch" needs compound-word protection
 _NOVA1_MILCH_BLOCKED = {
     "milchschnitte", "milchshake", "milchreis", "milchbrötchen",
-    "buttermilch", "milchspeiseeis",
+    "milchspeiseeis", "kondensmilch",
+    "hafermilch", "mandelmilch", "sojamilch", "kokosmilch", "reismilch",
+    "milchkaffee", "kaffee mit milch", "kaffee mit hafermilch",
+    "kaffee mit mandelmilch", "kaffee mit schuss milch",
+    "alpro hafermilch",
 }
 
 # "reis" needs compound-word protection
@@ -166,15 +193,40 @@ _NOVA1_REIS_BLOCKED = {
 
 # "quark" needs compound-word protection
 _NOVA1_QUARK_BLOCKED = {
-    "fruchtquark",
+    "fruchtquark", "kräuterquark",
+}
+
+# "apfel" blocked in beverages/processed
+_NOVA1_APFEL_BLOCKED = {
+    "apfelsaft", "apfelschorle", "apfelsaftschorle", "apfelmus",
+    "apfelmark", "apfelkuchen", "apfelessig",
+}
+
+# "gurke" blocked in pickled
+_NOVA1_GURKE_BLOCKED = {
+    "gewürzgurke", "gewürzgurken",
 }
 
 # "salat" as lettuce (NOVA 1) vs prepared salad
 _NOVA1_SALAT_BLOCKED = {
     "nudelsalat", "kartoffelsalat", "wurstsalat", "krautsalat",
     "fleischsalat", "heringssalat", "eiersalat", "thunfischsalat",
-    "geflügelsalat", "waldorfsalat",
+    "geflügelsalat", "waldorfsalat", "quinoasalat", "bohnensalat",
+    "obstsalat",
 }
+
+# "linsen" blocked in processed products
+_NOVA1_LINSEN_BLOCKED = {
+    "linsenwaffeln", "linsenwaffel", "linsenaufstrich",
+}
+
+# "erbsen" blocked in processed products
+_NOVA1_ERBSEN_BLOCKED = {
+    "erbsenproteinpulver", "erbsenpulver",
+}
+
+# "traube" blocked in juice
+_NOVA1_TRAUBE_BLOCKED = {"traubensaft"}
 
 _NOVA1_LETTERS = {"F", "G", "V", "U", "T", "E", "H", "K", "N", "M", "C"}
 
@@ -186,20 +238,36 @@ _NOVA2_OILS = {
 }
 
 _NOVA2_FLOUR = {
-    "mehl", "weizenmehl", "roggenmehl", "dinkelmehl", "maismehl",
-    "kartoffelmehl",
+    "weizenmehl", "roggenmehl", "dinkelmehl", "maismehl",
+    "kartoffelmehl", "mandelmehl",
+}
+# "mehl" blocked in compound words (bread described by flour)
+_NOVA2_MEHL_BLOCKED = {
+    "vollkornbrot", "brötchen", "dinkelvollkornmehl", "weißmehl brötchen",
 }
 
 _NOVA2_OTHER = {
-    "honig", "ahornsirup",
-    "essig", "balsamico",
-    "speisestärke", "gelatine", "backpulver", "hefe",
+    "ahornsirup", "agavendicksaft",
+    "speisestärke", "gelatine", "backpulver",
+}
+
+# "hefe" blocked — "hefe" in ingredient lists shouldn't trigger NOVA 2
+_NOVA2_HEFE_BLOCKED = {"maultasche", "hefeteig"}
+
+# "honig" blocked in compounds
+_NOVA2_HONIG_BLOCKED = {"honigmelone", "honigkuchen", "honig-senf"}
+
+# "essig" blocked in salad dressings
+_NOVA2_ESSIG_BLOCKED = {
+    "essig-öl", "essig/öl", "essigmarinade", "essig-öldressing",
+    "essig-öl-dressing",
 }
 
 # "butter" needs compound protection
 _NOVA2_BUTTER_BLOCKED = {
     "butterkeks", "erdnussbutter", "buttermilch", "buttergebäck",
     "buttercreme", "buttercremetorte", "erdnussbutter",
+    "butterkäse", "kräuterbutter", "butterhörnchen", "buttercroissant",
 }
 
 # "ei"/"eier" needs compound protection — these contain "ei" but aren't plain eggs
@@ -211,20 +279,45 @@ _NOVA1_EI_BLOCKED = {
 # "zucker" needs compound protection
 _NOVA2_ZUCKER_BLOCKED = {
     "zuckerwatte", "zuckerstreusel", "zuckerguss",
+    "zuckerfrei", "weniger zucker", "ohne zucker",
 }
 
 # "salz" needs compound protection
 _NOVA2_SALZ_BLOCKED = {
     "salzstangen", "salzgebäck", "salzbrezeln", "salzcracker",
+    "salzkartoffel", "salzkartoffeln",
+}
+
+# NOVA 2 spices (R-code items that should be NOVA 2, not 3)
+_NOVA2_SPICES = {
+    "zimt", "kurkuma", "gewürze", "paprikapulver",
+    "currypulver", "oregano", "basilikum getrocknet",
+}
+# "pfeffer" needs compound blocker
+_NOVA2_PFEFFER_BLOCKED = {
+    "pfefferminztee", "pfefferminz", "pfefferbeisser", "pfefferbeißer",
 }
 
 # -- Priority 4: NOVA 4 keywords --
 
 _NOVA4_ULTRA_PROCESSED = {
-    "energy drink", "energydrink", "chips", "ketchup", "fertiggericht",
-    "tiefkühl", "instant", "mikrowelle", "dosensuppe", "tütensuppe",
-    "cornflakes", "toast", "gummibärchen", "gummibär", "weingummi",
+    "energy drink", "energydrink", "chips", "fertiggericht",
+    "instant", "mikrowelle", "dosensuppe", "tütensuppe",
+    "cornflakes", "gummibärchen", "gummibär", "weingummi",
     "schokoriegel", "müsliriegel", "proteinriegel", "energieriegel",
+    "eiweißpulver", "proteinpulver", "whey protein",
+    "smoothie", "schorle", "apfelsaft", "orangensaft", "traubensaft",
+    "cranberrysaft", "johannisbeerschorle",
+    "hafermilch", "haferdrink", "mandelmilch", "sojamilch", "sojadrink",
+    "alpro", "kaffeeweißer",
+    "cappuccino", "cappucchino", "milchkaffee", "eiskaffee",
+    "latte", "matcha latte",
+}
+
+# "tiefkühl" blocked when followed by plain food
+_NOVA4_TIEFKUEHL_BLOCKED = {
+    "tiefkühlbeeren", "tiefkühlgemüse", "tiefkühlobst",
+    "tk himbeeren", "tk beeren",
 }
 
 _NOVA4_PROCESSED_MEAT = {
@@ -234,21 +327,23 @@ _NOVA4_PROCESSED_MEAT = {
     "fischstäbchen",
 }
 
-# "schinken" should be NOVA 4 as a keyword (processed meat product)
-_NOVA4_SCHINKEN_BLOCKED = {
-    "schinkenbrot",
-}
-
 _NOVA4_SWEETS = {
     "bonbon", "lakritze", "lakritz", "keks", "kekse", "cookie",
-    "waffel", "croissant", "schokocreme", "nuss-nougat-creme",
-    "nutella", "marmelade", "konfitüre", "erdnussbutter",
+    "croissant", "schokocreme", "nuss-nougat-creme",
+    "nutella", "konfitüre", "erdnussbutter",
+    "kuchen", "torte",
 }
+
+# "waffel" blocked for maiswaffeln/linsenwaffeln
+_NOVA4_WAFFEL_BLOCKED = {"maiswaffeln", "maiswaffel", "linsenwaffeln", "linsenwaffel", "reiswaffel"}
 
 _NOVA4_DRINKS = {
     "cola", "fanta", "sprite", "limonade", "eistee", "ice tea",
-    "spezi", "radler", "alkopop", "sirup",
+    "spezi", "alkopop", "sirup",
 }
+
+# "cola" blocked in rucola
+_NOVA4_COLA_BLOCKED = {"rucola"}
 
 _NOVA4_DAIRY = {
     "milchschnitte", "milchshake", "fruchtjoghurt", "fruchtquark",
@@ -269,16 +364,63 @@ _NOVA4_CEREAL = {
     "schokomüsli",
 }
 
+_NOVA4_SOY_PLANT = {
+    "tofu", "sojasoße", "sojasauce", "erdnussmus", "erdnusssoße",
+    "flohsamenschalen", "flohsamenschalenpulver",
+    "linsenwaffeln", "linsenwaffel", "linsenaufstrich",
+    "mandelmus", "röstzwiebeln",
+    "ajvar", "avocadocreme", "guacamole",
+    "hummus", "falafel",
+    "kondensmilch",
+}
+
+_NOVA4_MISC = {
+    "bratensoße", "vanilleeis", "apfelmus", "apfelmark",
+    "eiweißpulver", "proteinpulver", "whey protein",
+    "erbsenproteinpulver", "erbsenpulver",
+    "lavita", "multivitaminsaft", "karottensaft",
+    "bierschinken", "speck",
+    "mangolassi",
+    "wasser mit sirup",
+    "bratwürste",
+    "ramen",
+    "honig-senf-dressing",
+}
+
 # -- Priority 5: NOVA 3 keywords --
 
 _NOVA3_KEYWORDS = {
-    "käse",
+    "käse", "frischkäse",
     "brot", "brötchen", "brezel", "laugengebäck",
-    "bier", "wein", "sekt", "schnaps", "likör", "obstbrand",
-    "whisky", "vodka", "rum", "gin",
+    "toast", "marmelade", "ketchup",
+    "bier", "sekt", "schnaps", "likör", "obstbrand",
+    "whisky", "vodka", "radler",
     "konserve", "dose",
-    "räucherlachs", "räucherfisch",
+    "räucherlachs", "räucherfisch", "stremellachs", "geräuchert",
+    "schinken", "kochschinken", "lachsschinken",
+    "gewürzgurke", "gewürzgurken", "cornichons", "essiggurken",
+    "sauerkraut", "kimchi", "oliven",
+    "gnocchi", "maiswaffeln",
+    "butterkäse", "kräuterbutter",
+    "passierte tomaten", "stückige tomaten", "gestückelte tomaten",
+    "meerrettich", "kloß", "klöße",
+    "pfannkuchen", "flammkuchen",
+    "thunfisch im eigenen saft",
+    "vollkornwrap", "weizenwrap", "wrap",
+    "weißweinschorle",
 }
+
+# "wein" blocked to avoid matching inside "schwein" words
+_NOVA3_WEIN_BLOCKED = {
+    "schweinebraten", "schweinefilet", "schweinefleisch",
+    "schweineschnitzel", "schweinesteak", "schwein",
+}
+
+# "gin" blocked to avoid matching inside "aubergine"
+_NOVA3_GIN_BLOCKED = {"aubergine"}
+
+# "rum" blocked to avoid matching inside "crumble"
+_NOVA3_RUM_BLOCKED = {"crumble", "apple crumble"}
 
 
 def _layer2_description_override(layer1: dict, bls_code: str,
@@ -303,13 +445,24 @@ def _layer2_description_override(layer1: dict, bls_code: str,
 
     # ── Priority 2: NOVA 1 keywords ──
     if letter in _NOVA1_LETTERS:
-        # Direct whole-word matches
         for kw in _NOVA1_WHOLE_WORDS:
             if kw in lower:
                 return _result(1, 0.90, "description_override",
                                f"keyword '{kw}' → NOVA 1")
 
-        # Short words with word-boundary protection
+        # Plain dairy → NOVA 1
+        for kw in _NOVA1_DAIRY:
+            if kw in lower:
+                if not any(blocked in lower for blocked in _NOVA1_DAIRY_BLOCKED):
+                    return _result(1, 0.90, "description_override",
+                                   f"keyword '{kw}' → NOVA 1 (plain dairy)")
+
+        # "frisch" with compound protection
+        if "frisch" in lower:
+            if not any(blocked in lower for blocked in _NOVA1_FRISCH_BLOCKED):
+                return _result(1, 0.90, "description_override",
+                               "keyword 'frisch' → NOVA 1")
+
         import re
         for kw in _NOVA1_SHORT_WORDS:
             if re.search(r'\b' + re.escape(kw) + r'\b', lower):
@@ -317,25 +470,46 @@ def _layer2_description_override(layer1: dict, bls_code: str,
                     return _result(1, 0.90, "description_override",
                                    f"keyword '{kw}' (word boundary) → NOVA 1")
 
-        # "milch" with compound protection
         if "milch" in lower:
             if not any(blocked in lower for blocked in _NOVA1_MILCH_BLOCKED):
                 return _result(1, 0.90, "description_override",
                                "keyword 'milch' (plain) → NOVA 1")
 
-        # "reis" with compound protection
+        if "apfel" in lower:
+            if not any(blocked in lower for blocked in _NOVA1_APFEL_BLOCKED):
+                return _result(1, 0.90, "description_override",
+                               "keyword 'apfel' → NOVA 1")
+
+        if "gurke" in lower:
+            if not any(blocked in lower for blocked in _NOVA1_GURKE_BLOCKED):
+                return _result(1, 0.90, "description_override",
+                               "keyword 'gurke' → NOVA 1")
+
         if "reis" in lower:
             if not any(blocked in lower for blocked in _NOVA1_REIS_BLOCKED):
                 return _result(1, 0.90, "description_override",
                                "keyword 'reis' (plain) → NOVA 1")
 
-        # "quark" with compound protection
         if "quark" in lower:
             if not any(blocked in lower for blocked in _NOVA1_QUARK_BLOCKED):
                 return _result(1, 0.90, "description_override",
                                "keyword 'quark' (plain) → NOVA 1")
 
-        # "salat" as lettuce with compound protection
+        if "linsen" in lower:
+            if not any(blocked in lower for blocked in _NOVA1_LINSEN_BLOCKED):
+                return _result(1, 0.90, "description_override",
+                               "keyword 'linsen' → NOVA 1")
+
+        if "erbsen" in lower:
+            if not any(blocked in lower for blocked in _NOVA1_ERBSEN_BLOCKED):
+                return _result(1, 0.90, "description_override",
+                               "keyword 'erbsen' → NOVA 1")
+
+        if "traube" in lower:
+            if not any(blocked in lower for blocked in _NOVA1_TRAUBE_BLOCKED):
+                return _result(1, 0.90, "description_override",
+                               "keyword 'traube' → NOVA 1")
+
         if "salat" in lower:
             if not any(blocked in lower for blocked in _NOVA1_SALAT_BLOCKED):
                 return _result(1, 0.90, "description_override",
@@ -366,14 +540,35 @@ def _layer2_description_override(layer1: dict, bls_code: str,
             return _result(2, 0.90, "description_override",
                            "keyword 'salz' (plain) → NOVA 2")
 
-    if "meersalz" in lower:
-        return _result(2, 0.90, "description_override",
-                       "keyword 'meersalz' → NOVA 2")
+    if "honig" in lower:
+        if not any(blocked in lower for blocked in _NOVA2_HONIG_BLOCKED):
+            return _result(2, 0.90, "description_override",
+                           "keyword 'honig' → NOVA 2")
+
+    if "essig" in lower:
+        if not any(blocked in lower for blocked in _NOVA2_ESSIG_BLOCKED):
+            return _result(2, 0.90, "description_override",
+                           "keyword 'essig' → NOVA 2")
 
     for kw in _NOVA2_FLOUR:
         if kw in lower:
             return _result(2, 0.90, "description_override",
                            f"keyword '{kw}' → NOVA 2 (flour)")
+
+    if "mehl" in lower:
+        if not any(blocked in lower for blocked in _NOVA2_MEHL_BLOCKED):
+            return _result(2, 0.90, "description_override",
+                           "keyword 'mehl' → NOVA 2 (flour)")
+
+    for kw in _NOVA2_SPICES:
+        if kw in lower:
+            return _result(2, 0.90, "description_override",
+                           f"keyword '{kw}' → NOVA 2 (spice)")
+
+    if "pfeffer" in lower:
+        if not any(blocked in lower for blocked in _NOVA2_PFEFFER_BLOCKED):
+            return _result(2, 0.90, "description_override",
+                           "keyword 'pfeffer' → NOVA 2 (spice)")
 
     for kw in _NOVA2_OTHER:
         if kw in lower:
@@ -383,28 +578,31 @@ def _layer2_description_override(layer1: dict, bls_code: str,
     # ── Priority 4: NOVA 4 keywords ──
     for kw in _NOVA4_ULTRA_PROCESSED:
         if kw in lower:
-            return _result(4, 0.85, "description_override",
-                           f"keyword '{kw}' → NOVA 4 (ultra-processed)")
+            if not any(blocked in lower for blocked in _NOVA4_TIEFKUEHL_BLOCKED) or "tiefkühl" not in kw:
+                return _result(4, 0.85, "description_override",
+                               f"keyword '{kw}' → NOVA 4 (ultra-processed)")
 
     for kw in _NOVA4_PROCESSED_MEAT:
         if kw in lower:
             return _result(4, 0.85, "description_override",
                            f"keyword '{kw}' → NOVA 4 (processed meat)")
 
-    if "schinken" in lower:
-        if not any(blocked in lower for blocked in _NOVA4_SCHINKEN_BLOCKED):
-            return _result(4, 0.85, "description_override",
-                           "keyword 'schinken' → NOVA 4 (processed meat)")
-
     for kw in _NOVA4_SWEETS:
         if kw in lower:
             return _result(4, 0.85, "description_override",
                            f"keyword '{kw}' → NOVA 4 (sweets)")
 
+    # "waffel" with blocker for maiswaffeln etc
+    if "waffel" in lower:
+        if not any(blocked in lower for blocked in _NOVA4_WAFFEL_BLOCKED):
+            return _result(4, 0.85, "description_override",
+                           "keyword 'waffel' → NOVA 4 (sweets)")
+
     for kw in _NOVA4_DRINKS:
         if kw in lower:
-            return _result(4, 0.85, "description_override",
-                           f"keyword '{kw}' → NOVA 4 (drink)")
+            if not any(blocked in lower for blocked in _NOVA4_COLA_BLOCKED) or "cola" not in kw:
+                return _result(4, 0.85, "description_override",
+                               f"keyword '{kw}' → NOVA 4 (drink)")
 
     for kw in _NOVA4_DAIRY:
         if kw in lower:
@@ -426,9 +624,25 @@ def _layer2_description_override(layer1: dict, bls_code: str,
             return _result(4, 0.85, "description_override",
                            f"keyword '{kw}' → NOVA 4 (cereal)")
 
+    for kw in _NOVA4_SOY_PLANT:
+        if kw in lower:
+            return _result(4, 0.85, "description_override",
+                           f"keyword '{kw}' → NOVA 4 (processed plant)")
+
+    for kw in _NOVA4_MISC:
+        if kw in lower:
+            return _result(4, 0.85, "description_override",
+                           f"keyword '{kw}' → NOVA 4")
+
     # ── Priority 5: NOVA 3 keywords ──
     for kw in _NOVA3_KEYWORDS:
         if kw in lower:
+            if kw == "gin" and any(blocked in lower for blocked in _NOVA3_GIN_BLOCKED):
+                continue
+            if kw == "wein" and any(blocked in lower for blocked in _NOVA3_WEIN_BLOCKED):
+                continue
+            if kw == "rum" and any(blocked in lower for blocked in _NOVA3_RUM_BLOCKED):
+                continue
             return _result(3, 0.80, "description_override",
                            f"keyword '{kw}' → NOVA 3")
 
