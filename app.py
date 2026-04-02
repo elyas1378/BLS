@@ -156,62 +156,98 @@ st.markdown("""
         display: inline-block;
     }
 
-    /* Result cards */
-    .result-card {
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 1rem 1.2rem;
-        margin-bottom: 0.75rem;
-        background: #fafbfc;
+    /* Result card */
+    .result-card-new {
+        background: #ffffff;
+        border-radius: 16px;
+        border: 0.5px solid #e5e5ea;
+        padding: 24px 28px;
+        margin-bottom: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
     }
-    .result-card:hover { border-color: #cbd5e1; }
-    .result-card .rank-badge {
-        display: inline-block; width: 28px; height: 28px; line-height: 28px;
-        text-align: center; border-radius: 50%; font-weight: 700;
-        font-size: 0.85rem; margin-right: 0.5rem;
-    }
-    .result-card .code { font-family: monospace; font-weight: 600; font-size: 0.95rem; }
-    .result-card .name { color: #334155; }
-    .result-card .meta { font-size: 0.82rem; color: #64748b; margin-top: 0.4rem; }
+    .result-card-new.warning-orange { border-left: 3px solid #ff9500; }
+    .result-card-new.warning-red { border-left: 3px solid #ff3b30; }
 
-    /* Confidence bar */
-    .conf-bar {
-        display: inline-block; height: 6px; border-radius: 3px;
-        vertical-align: middle; margin-left: 6px;
+    .rc-header {
+        display: flex; justify-content: space-between;
+        align-items: flex-start; margin-bottom: 16px;
     }
-
-    /* Source & safety badges */
-    .badge {
-        display: inline-block; padding: 1px 7px; border-radius: 3px;
-        font-size: 0.75rem; font-weight: 500; vertical-align: middle;
+    .rc-food-name {
+        font-size: 20px; font-weight: 600; color: #1d1d1f;
+        letter-spacing: -0.02em;
     }
-    .badge-verified { background: #dcfce7; color: #166534; }
-    .badge-cached   { background: #e0e7ff; color: #3730a3; }
-    .badge-api      { background: #fef3c7; color: #92400e; }
-    .badge-ok       { background: #dcfce7; color: #166534; }
-    .badge-check    { background: #fef2f2; color: #991b1b; }
-
-    /* Confidence warning banners */
-    .match-warning {
-        border-radius: 6px; padding: 0.6rem 1rem; margin-bottom: 0.75rem;
-        font-size: 0.85rem;
-    }
-    .match-warning-orange {
-        background: #fef3c7; border: 1px solid #f59e0b; color: #92400e;
-    }
-    .match-warning-red {
-        background: #fee2e2; border: 1px solid #ef4444; color: #991b1b;
+    .rc-food-meta { font-size: 13px; color: #86868b; margin-top: 4px; }
+    .rc-header-right {
+        display: flex; gap: 6px; align-items: center; flex-shrink: 0;
     }
 
-    /* NOVA */
-    .nova-pill {
-        display: inline-block; padding: 1px 8px; border-radius: 4px;
-        font-weight: 700; font-size: 0.8rem; color: white;
+    .rc-badge {
+        font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 500;
+    }
+    .rc-badge-verified { background: #f0faf0; color: #248a24; }
+    .rc-badge-cached { background: #f0f0ff; color: #5856d6; }
+    .rc-badge-api { background: #faf0ff; color: #af52de; }
+    .rc-badge-brand { background: #fff8f0; color: #ff9500; }
+
+    .rc-nova {
+        font-size: 11px; padding: 4px 10px; border-radius: 8px; font-weight: 500;
+    }
+    .rc-nova-1 { background: #e8f8e8; color: #248a24; }
+    .rc-nova-2 { background: #fffde8; color: #8a7a24; }
+    .rc-nova-3 { background: #fff4e8; color: #9a6700; }
+    .rc-nova-4 { background: #fff0f0; color: #ff3b30; }
+
+    .rc-foodgroup {
+        font-size: 11px; padding: 4px 10px; border-radius: 8px;
+        font-weight: 500; background: #f0f0ff; color: #5856d6;
     }
 
-    /* Summary table styling */
-    .summary-table th { background: #f1f5f9; font-size: 0.8rem; }
-    .summary-table td { font-size: 0.85rem; }
+    .rc-warning {
+        border-radius: 8px; padding: 10px 14px; margin-bottom: 16px;
+        font-size: 12px; line-height: 1.4;
+    }
+    .rc-warning-orange { background: #fff8f0; color: #9a6700; }
+    .rc-warning-red { background: #fff0f0; color: #ff3b30; }
+    .rc-warning-yellow { background: #fffbf0; color: #9a6700; }
+
+    .rc-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .rc-bls-col {
+        background: #f5f5f7; border-radius: 12px; padding: 16px;
+    }
+    .rc-bls-header {
+        display: flex; justify-content: space-between;
+        align-items: center; margin-bottom: 10px;
+    }
+    .rc-bls-label { font-size: 12px; color: #86868b; font-weight: 500; }
+    .rc-bls-conf { font-size: 12px; font-weight: 600; }
+    .rc-conf-green { color: #34c759; }
+    .rc-conf-yellow { color: #ff9500; }
+    .rc-conf-red { color: #ff3b30; }
+
+    .rc-progress {
+        height: 3px; background: #e5e5ea; border-radius: 2px; margin-bottom: 12px;
+    }
+    .rc-progress-fill {
+        height: 100%; border-radius: 2px; transition: width 0.6s ease;
+    }
+    .rc-conf-bg-green { background: #34c759; }
+    .rc-conf-bg-yellow { background: #ff9500; }
+    .rc-conf-bg-red { background: #ff3b30; }
+
+    .rc-bls-code {
+        font-size: 15px; font-weight: 600; color: #1d1d1f;
+        font-family: SFMono-Regular, Menlo, 'Courier New', monospace;
+        letter-spacing: 0.02em; margin-bottom: 4px;
+    }
+    .rc-bls-name { font-size: 12px; color: #3c3c43; line-height: 1.4; }
+
+    .rc-footer {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-top: 14px; padding-top: 12px; border-top: 0.5px solid #e5e5ea;
+    }
+    .rc-source { font-size: 12px; color: #86868b; }
 
 
 </style>
@@ -267,218 +303,126 @@ def get_smart_reranker():
     return SmartReranker(enable_llm=False)
 
 
-def conf_color(c):
-    if c >= 0.85: return "#16a34a"
-    if c >= 0.60: return "#ca8a04"
-    return "#dc2626"
-
-
-def conf_bg(c):
-    if c >= 0.85: return "#dcfce7"
-    if c >= 0.60: return "#fef9c3"
-    return "#fee2e2"
-
-
-def source_badge(src):
-    m = {"verified": "badge-verified", "cached": "badge-cached", "api": "badge-api"}
-    labels = {"verified": "verified", "cached": "cached", "api": "live API"}
-    cls = m.get(src, "")
-    lbl = labels.get(src, "")
-    if not lbl:
-        return ""
-    return f"<span class='badge {cls}'>{lbl}</span>"
-
-
-def nova_pill(nova, low_confidence=False):
-    if nova is None:
-        return "<span style='color:#94a3b8;'>—</span>"
-    colors = {1: "#16a34a", 2: "#65a30d", 3: "#ca8a04", 4: "#dc2626"}
-    bg = colors.get(nova, "#94a3b8")
-    if low_confidence:
-        label = f"NOVA {nova} (?)"
-        return (f"<span class='nova-pill' style='background:{bg}; opacity:0.6;' "
-                f"title='Low confidence — enable Claude API for better accuracy'>"
-                f"{label}</span>")
-    return f"<span class='nova-pill' style='background:{bg};'>NOVA {nova}</span>"
-
-
 def safety_flag(result, food_desc=None, brand=None):
     """Compute safety flag from a RerankerResult."""
     m302 = result.bls302_matches
     m40 = result.bls40_matches
-
-    # Condition 4: one version has matches, the other has none
     if (m302 and not m40) or (m40 and not m302):
         return "check"
-
     if not m302 and not m40:
         return "check"
-
     top302 = m302[0] if m302 else None
     top40 = m40[0] if m40 else None
-
-    # Condition 3: either top-1 confidence < 0.60
     if top302 and top302.confidence < 0.60:
         return "check"
     if top40 and top40.confidence < 0.60:
         return "check"
-
-    # Condition 1: different food group letter
     if top302 and top40 and top302.code[0] != top40.code[0]:
         return "check"
-
-    # Condition 2: food group classification differs
     if top302 and top40:
         cls302 = classify(top302.code, "302", food_desc=food_desc, brand=brand)
         cls40 = classify(top40.code, "40", food_desc=food_desc, brand=brand)
         if cls302["main_group"] and cls40["main_group"]:
             if cls302["main_group"] != cls40["main_group"]:
                 return "check"
-
     return "ok"
 
 
-def safety_badge_html(flag):
-    if flag == "ok":
-        return "<span class='badge badge-ok'>OK</span>"
-    return "<span class='badge badge-check'>CHECK</span>"
+def _conf_class(c):
+    if c >= 0.85: return "green"
+    if c >= 0.60: return "yellow"
+    return "red"
 
 
-def build_summary_row(query_text, nq, result, flag, claude_nova=None, used_claude=False):
-    """Build a dict for the summary table."""
-    def _m(matches, idx):
-        if idx < len(matches):
-            return matches[idx].code, matches[idx].confidence
-        return "—", None
+def _bls_col_html(matches, label, source):
+    """Render one BLS column (3.02 or 4.0)."""
+    if not matches:
+        return (f'<div class="rc-bls-col">'
+                f'<div class="rc-bls-header"><span class="rc-bls-label">{label}</span></div>'
+                f'<div class="rc-bls-code" style="color:#86868b;">—</div>'
+                f'<div class="rc-bls-name" style="font-style:italic;">No suitable match</div></div>')
+    m = matches[0]
+    pct = int(m.confidence * 100)
+    cc = _conf_class(m.confidence)
+    src_map = {"verified": "rc-badge-verified", "cached": "rc-badge-cached", "api": "rc-badge-api"}
+    src_lbl = {"verified": "verified", "cached": "cached", "api": "live API"}
+    src_html = ""
+    if source in src_map:
+        src_html = f' <span class="rc-badge {src_map[source]}">{src_lbl[source]}</span>'
+    return (f'<div class="rc-bls-col">'
+            f'<div class="rc-bls-header">'
+            f'<span class="rc-bls-label">{label}{src_html}</span>'
+            f'<span class="rc-bls-conf rc-conf-{cc}">{pct}%</span></div>'
+            f'<div class="rc-progress"><div class="rc-progress-fill rc-conf-bg-{cc}" style="width:{pct}%"></div></div>'
+            f'<div class="rc-bls-code">{m.code}</div>'
+            f'<div class="rc-bls-name">{m.name}</div></div>')
+
+
+def render_result_card(query_text, nq, result, flag, src302, src40,
+                       claude_nova=None, used_claude=False, source_text=""):
+    """Render the unified result card."""
     m302 = result.bls302_matches or []
     m40 = result.bls40_matches or []
-    c302_1 = _m(m302, 0)
-    c302_2 = _m(m302, 1)
-    c302_3 = _m(m302, 2)
-    c40_1 = _m(m40, 0)
-    c40_2 = _m(m40, 1)
-    c40_3 = _m(m40, 2)
+    top1_302 = m302[0].confidence if m302 else 0
+    top1_40 = m40[0].confidence if m40 else 0
+    top1_conf = max(top1_302, top1_40)
 
-    # Food group from top-1 BLS 3.02
-    cls = classify(m302[0].code, "302", food_desc=query_text, brand=nq.brand) if m302 else {"main_group": None, "sub_group": None, "nova": None}
+    # Card warning class
+    card_class = "result-card-new"
+    if top1_conf < 0.30:
+        card_class += " warning-red"
+    elif top1_conf < 0.60:
+        card_class += " warning-orange"
+
+    # NOVA + food group from top BLS 3.02 match
+    cls = classify(m302[0].code, "302", food_desc=query_text, brand=nq.brand) if m302 else {}
+    nova = None
     if m302:
         nova, _ = resolve_nova(m302[0].code, "302", query_text, nq.brand, claude_nova, used_claude)
-        cls["nova"] = nova
+    nova_cls = f"rc-nova-{nova}" if nova else ""
+    nova_html = f'<span class="rc-nova {nova_cls}">NOVA {nova}</span>' if nova else ""
+    fg = (cls.get("main_group") or "").replace("_", " ")
+    fg_html = f'<span class="rc-foodgroup">{fg}</span>' if fg and fg != "—" else ""
 
-    def _fmt_conf(c):
-        return f"{c:.0%}" if c is not None else "—"
+    # Source badge
+    src_badge_cls = {"verified": "rc-badge-verified", "cached": "rc-badge-cached", "api": "rc-badge-api"}
+    src_badge_lbl = {"verified": "verified", "cached": "cached", "api": "live API"}
+    meta_badge = ""
+    src_key = src302 or src40
+    if src_key in src_badge_cls:
+        meta_badge = f' <span class="rc-badge {src_badge_cls[src_key]}">{src_badge_lbl[src_key]}</span>'
+    brand_badge = f' <span class="rc-badge rc-badge-brand">brand</span>' if nq.brand else ""
 
-    return {
-        "Food item": query_text,
-        "Normalized": nq.cleaned,
-        "BLS 3.02 1st": c302_1[0],
-        "Conf 1st 3.02": _fmt_conf(c302_1[1]),
-        "BLS 3.02 2nd": c302_2[0],
-        "Conf 2nd 3.02": _fmt_conf(c302_2[1]),
-        "BLS 3.02 3rd": c302_3[0],
-        "Conf 3rd 3.02": _fmt_conf(c302_3[1]),
-        "BLS 4.0 1st": c40_1[0],
-        "Conf 1st 4.0": _fmt_conf(c40_1[1]),
-        "BLS 4.0 2nd": c40_2[0],
-        "Conf 2nd 4.0": _fmt_conf(c40_2[1]),
-        "BLS 4.0 3rd": c40_3[0],
-        "Conf 3rd 4.0": _fmt_conf(c40_3[1]),
-        "Main group": cls["main_group"] or "—",
-        "Sub group": cls["sub_group"] or "—",
-        "NOVA": cls["nova"] if cls["nova"] is not None else "—",
-        "Safety": "OK" if flag == "ok" else "CHECK",
-    }
+    # Warnings
+    warnings_html = ""
+    if top1_conf < 0.30:
+        warnings_html += '<div class="rc-warning rc-warning-red">No suitable BLS match found — consider rephrasing or decomposing into ingredients.</div>'
+        if query_text not in st.session_state.unmatched_foods:
+            st.session_state.unmatched_foods.append(query_text)
+    elif top1_conf < 0.60:
+        warnings_html += '<div class="rc-warning rc-warning-orange">No exact match found — closest alternative shown. Manual review recommended.</div>'
+    if flag == "check" and top1_conf >= 0.30:
+        warnings_html += '<div class="rc-warning rc-warning-yellow">Versions differ — BLS 3.02 and 4.0 return substantially different matches. Review recommended.</div>'
 
+    # BLS columns
+    col302_html = _bls_col_html(m302, "BLS 3.02", src302)
+    col40_html = _bls_col_html(m40, "BLS 4.0", src40)
 
-def render_summary_table(row):
-    """Render summary table as styled HTML."""
-    def _conf_cell(val):
-        if val == "—":
-            return "<td style='text-align:center; color:#94a3b8;'>—</td>"
-        pct = int(val.replace("%", ""))
-        c = conf_color(pct / 100)
-        bg = conf_bg(pct / 100)
-        return f"<td style='text-align:center; background:{bg}; color:{c}; font-weight:600;'>{val}</td>"
-
-    def _code_cell(val):
-        if val == "—":
-            return "<td style='text-align:center; color:#94a3b8;'>—</td>"
-        return f"<td style='text-align:center; font-family:monospace; font-weight:500;'>{val}</td>"
-
-    def _safety_cell(val):
-        if val == "OK":
-            return "<td style='text-align:center;'><span class='badge badge-ok'>OK</span></td>"
-        return "<td style='text-align:center;'><span class='badge badge-check'>CHECK</span></td>"
-
-    def _nova_cell(val):
-        if val == "—":
-            return "<td style='text-align:center; color:#94a3b8;'>—</td>"
-        return f"<td style='text-align:center;'>{nova_pill(int(val))}</td>"
-
-    html = """<div style="overflow-x:auto; margin-bottom:1.2rem;">
-    <table style="width:100%; border-collapse:collapse; font-size:0.82rem; border:1px solid #e2e8f0; border-radius:6px;">
-    <thead><tr style="background:#f1f5f9;">"""
-
-    headers = list(row.keys())
-    for h in headers:
-        html += f"<th style='padding:8px 6px; text-align:center; border-bottom:2px solid #e2e8f0; font-weight:600; color:#475569; white-space:nowrap;'>{h}</th>"
-    html += "</tr></thead><tbody><tr>"
-
-    for key, val in row.items():
-        val_str = str(val)
-        if key.startswith("Conf"):
-            html += _conf_cell(val_str)
-        elif key.startswith("BLS"):
-            html += _code_cell(val_str)
-        elif key == "Safety":
-            html += _safety_cell(val_str)
-        elif key == "NOVA":
-            html += _nova_cell(val_str)
-        elif key == "Main group" or key == "Sub group":
-            display = val_str.replace("_", " ") if val_str != "—" else "—"
-            html += f"<td style='padding:6px; font-size:0.78rem; color:#475569;'>{display}</td>"
-        else:
-            html += f"<td style='padding:6px; color:#334155;'>{val_str}</td>"
-
-    html += "</tr></tbody></table></div>"
-    return html
-
-
-def display_card(m, bls_ver, result_source="", food_desc=None, brand=None,
-                 claude_nova=None, used_claude=False):
-    """Render a single match as a styled card."""
-    color = conf_color(m.confidence)
-    bg = conf_bg(m.confidence)
-    cls = classify(m.code, bls_ver, food_desc=food_desc, brand=brand)
-    main_str = (cls["main_group"] or "—").replace("_", " ")
-    sub_str = (cls["sub_group"] or "—").replace("_", " ")
-    pct = int(m.confidence * 100)
-    bar_w = max(pct, 5)
-
-    nova, nova_low = resolve_nova(m.code, bls_ver, food_desc, brand, claude_nova, used_claude)
-
-    src_html = f" {source_badge(result_source)}" if result_source and m.rank == 1 else ""
-    low_conf_note = ""
-    if m.rank == 1 and m.confidence < 0.60:
-        low_conf_note = ("<div style='color:#92400e; font-size:0.78rem; margin-top:0.3rem; "
-                         "font-style:italic;'>Note: Closest available match — may not "
-                         "accurately represent this food item.</div>")
-
-    st.markdown(f"""<div class="result-card">
-        <div>
-            <span class="rank-badge" style="background:{bg}; color:{color};">{m.rank}</span>
-            <span class="code" style="color:{color};">{m.code}</span>
-            <span class="name">&nbsp;— {m.name}</span>{src_html}
+    html = f'''<div class="{card_class}">
+        <div class="rc-header">
+            <div class="rc-header-left">
+                <div class="rc-food-name">{query_text}</div>
+                <div class="rc-food-meta">{nq.cleaned}{meta_badge}{brand_badge}</div>
+            </div>
+            <div class="rc-header-right">{nova_html}{fg_html}</div>
         </div>
-        <div style="margin-top:0.4rem;">
-            <span style="font-weight:600; color:{color}; font-size:0.9rem;">{m.confidence:.0%}</span>
-            <span class="conf-bar" style="width:{bar_w}px; background:{color};"></span>
-            <span style="color:#64748b; font-size:0.82rem; margin-left:8px;">{m.reasoning}</span>
+        {warnings_html}
+        <div class="rc-grid">{col302_html}{col40_html}</div>
+        <div class="rc-footer">
+            <span class="rc-source">{source_text}</span>
         </div>
-        <div class="meta">
-            {main_str} &nbsp;&middot;&nbsp; {sub_str} &nbsp;&middot;&nbsp; {nova_pill(nova, low_confidence=nova_low)}
-        </div>{low_conf_note}
-    </div>""", unsafe_allow_html=True)
+    </div>'''
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
@@ -660,61 +604,47 @@ if query:
     # ── Safety flag ──
     flag = safety_flag(result, query, nq.brand)
 
-    # ── Summary table ──
-    row = build_summary_row(query, nq, result, flag,
-                            claude_nova=claude_nova, used_claude=result_from_claude)
-    st.markdown("##### Summary", unsafe_allow_html=True)
-    st.markdown(render_summary_table(row), unsafe_allow_html=True)
-
-    # ── Confidence warning banner ──
-    top1_conf_302 = result.bls302_matches[0].confidence if result.bls302_matches else 0
-    top1_conf_40 = result.bls40_matches[0].confidence if result.bls40_matches else 0
-    top1_conf = max(top1_conf_302, top1_conf_40)
-
-    if top1_conf < 0.30:
-        st.markdown(
-            '<div class="match-warning match-warning-red">'
-            "No suitable BLS match found for this food item. Consider: "
-            "(1) rephrasing the food description more specifically, or "
-            "(2) decomposing into individual ingredients.</div>",
-            unsafe_allow_html=True,
-        )
-        if query not in st.session_state.unmatched_foods:
-            st.session_state.unmatched_foods.append(query)
-    elif top1_conf < 0.60:
-        st.markdown(
-            '<div class="match-warning match-warning-orange">'
-            "No exact match found. Closest alternative shown "
-            "— manual review recommended.</div>",
-            unsafe_allow_html=True,
-        )
-
-    # ── Status bar: source + safety + re-query ──
+    # ── Source text ──
     src302 = getattr(result, "bls302_source", "")
     src40 = getattr(result, "bls40_source", "")
-    status_parts = []
     if src302 == "verified":
-        status_parts.append("Verified lookup — no API cost")
+        source_text = "Verified lookup — no API cost"
     elif src302 == "cached":
-        status_parts.append("Served from cache — no API cost")
+        source_text = "Served from cache — no API cost"
     elif src302 == "api":
-        status_parts.append("Re-ranked by Claude API")
+        source_text = "Re-ranked by Claude API"
     else:
         rp = getattr(result, "resolution_path", "")
-        if rp == "verified":
-            status_parts.append("Verified lookup")
-        else:
-            status_parts.append("Rule-based matching")
+        source_text = "Verified lookup" if rp == "verified" else "Rule-based matching"
 
-    status_col, requery_col = st.columns([8, 2])
-    with status_col:
-        st.caption(" | ".join(status_parts))
-    with requery_col:
-        has_cached = src302 == "cached" or src40 == "cached"
-        if has_cached:
-            if st.button("Re-query", key="requery_btn", type="secondary"):
-                st.session_state.requery_food = query
-                st.rerun()
+    # ── Unified result card ──
+    render_result_card(query, nq, result, flag, src302, src40,
+                       claude_nova=claude_nova, used_claude=result_from_claude,
+                       source_text=source_text)
+
+    # ── Re-query button ──
+    has_cached = src302 == "cached" or src40 == "cached"
+    if has_cached:
+        if st.button("Re-query", key="requery_btn", type="secondary"):
+            st.session_state.requery_food = query
+            st.rerun()
+
+    # ── More matches (2nd and 3rd choices) ──
+    m302 = result.bls302_matches or []
+    m40 = result.bls40_matches or []
+    if len(m302) > 1 or len(m40) > 1:
+        with st.expander("More matches", expanded=False):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.caption("BLS 3.02")
+                for m in m302[1:3]:
+                    pct = int(m.confidence * 100)
+                    st.markdown(f"**{m.code}** — {m.name} ({pct}%)")
+            with col_b:
+                st.caption("BLS 4.0")
+                for m in m40[1:3]:
+                    pct = int(m.confidence * 100)
+                    st.markdown(f"**{m.code}** — {m.name} ({pct}%)")
 
     # ── Normalization details ──
     with st.expander("Normalization details", expanded=False):
@@ -732,55 +662,6 @@ if query:
             f"**Candidates:** {len(candidates.get('bls302', []))} (3.02) / "
             f"{len(candidates.get('bls40', []))} (4.0)"
         )
-
-    # ── Detailed card view ──
-    st.markdown(
-        f"##### Detailed Results &nbsp;&nbsp;{safety_badge_html(flag)}",
-        unsafe_allow_html=True,
-    )
-
-    col302, col40 = st.columns(2)
-    with col302:
-        st.markdown(
-            "<div style='font-weight:600; color:#1e3a5f; margin-bottom:0.5rem;'>BLS 3.02</div>",
-            unsafe_allow_html=True,
-        )
-        if result.bls302_matches:
-            for m in result.bls302_matches:
-                display_card(m, "302", src302, query, nq.brand,
-                             claude_nova=claude_nova, used_claude=result_from_claude)
-        else:
-            st.markdown(
-                "<div class='result-card' style='text-align:center; color:#94a3b8;'>No matches</div>",
-                unsafe_allow_html=True,
-            )
-
-    with col40:
-        st.markdown(
-            "<div style='font-weight:600; color:#1e3a5f; margin-bottom:0.5rem;'>BLS 4.0</div>",
-            unsafe_allow_html=True,
-        )
-        if result.bls40_matches:
-            for m in result.bls40_matches:
-                display_card(m, "40", src40, query, nq.brand,
-                             claude_nova=claude_nova, used_claude=result_from_claude)
-        else:
-            st.markdown(
-                "<div class='result-card' style='text-align:center; color:#94a3b8;'>No matches</div>",
-                unsafe_allow_html=True,
-            )
-
-    # ── Raw candidates ──
-    with st.expander("Raw candidates", expanded=False):
-        t1, t2 = st.tabs(["BLS 3.02", "BLS 4.0"])
-        with t1:
-            for i, c in enumerate(candidates.get("bls302", [])[:20], 1):
-                cd = c.to_dict() if hasattr(c, "to_dict") else c
-                st.text(f"{i:2d}. [{cd['code']}] {cd['name_de'][:55]:<55s} score={cd['score']:.3f}")
-        with t2:
-            for i, c in enumerate(candidates.get("bls40", [])[:20], 1):
-                cd = c.to_dict() if hasattr(c, "to_dict") else c
-                st.text(f"{i:2d}. [{cd['code']}] {cd['name_de'][:55]:<55s} score={cd['score']:.3f}")
 
     # ── Unmatched foods (in main area) ──
     if st.session_state.unmatched_foods:
