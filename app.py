@@ -95,6 +95,18 @@ st.markdown("""
     .badge-ok       { background: #dcfce7; color: #166534; }
     .badge-check    { background: #fef2f2; color: #991b1b; }
 
+    /* Confidence warning banners */
+    .match-warning {
+        border-radius: 6px; padding: 0.6rem 1rem; margin-bottom: 0.75rem;
+        font-size: 0.85rem;
+    }
+    .match-warning-orange {
+        background: #fef3c7; border: 1px solid #f59e0b; color: #92400e;
+    }
+    .match-warning-red {
+        background: #fee2e2; border: 1px solid #ef4444; color: #991b1b;
+    }
+
     /* NOVA */
     .nova-pill {
         display: inline-block; padding: 1px 8px; border-radius: 4px;
@@ -134,7 +146,8 @@ def load_text_retriever():
     from modules.text_retriever import TextMatchRetriever
     return TextMatchRetriever(verbose=False)
 
-for key, default in [("cache_hits", 0), ("api_calls", 0), ("requery_food", None)]:
+for key, default in [("cache_hits", 0), ("api_calls", 0), ("requery_food", None),
+                     ("unmatched_foods", [])]:
     if key not in st.session_state:
         st.session_state[key] = default
 
@@ -142,6 +155,16 @@ for key, default in [("cache_hits", 0), ("api_calls", 0), ("requery_food", None)
 # ═══════════════════════════════════════════════════════════
 #  Helpers
 # ═══════════════════════════════════════════════════════════
+
+def get_expander(api_key):
+    if not api_key:
+        return None
+    try:
+        from modules.query_expander import QueryExpander
+        return QueryExpander(api_key=api_key)
+    except Exception:
+        return None
+
 
 def get_reranker(api_key):
     if not api_key:
@@ -350,6 +373,11 @@ def display_card(m, bls_ver, result_source="", food_desc=None, brand=None,
     nova, nova_low = resolve_nova(m.code, bls_ver, food_desc, brand, claude_nova, used_claude)
 
     src_html = f" {source_badge(result_source)}" if result_source and m.rank == 1 else ""
+    low_conf_note = ""
+    if m.rank == 1 and m.confidence < 0.60:
+        low_conf_note = ("<div style='color:#92400e; font-size:0.78rem; margin-top:0.3rem; "
+                         "font-style:italic;'>Note: Closest available match — may not "
+                         "accurately represent this food item.</div>")
 
     st.markdown(f"""<div class="result-card">
         <div>
@@ -364,11 +392,11 @@ def display_card(m, bls_ver, result_source="", food_desc=None, brand=None,
         </div>
         <div class="meta">
             {main_str} &nbsp;&middot;&nbsp; {sub_str} &nbsp;&middot;&nbsp; {nova_pill(nova, low_confidence=nova_low)}
-        </div>
+        </div>{low_conf_note}
     </div>""", unsafe_allow_html=True)
 
 
-def get_boosted_candidates(text_ret, query, top_k=30):
+def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     from modules.normalizer import normalize
     from modules.concept_expansions import CONCEPT_EXPANSION
 
@@ -386,9 +414,16 @@ def get_boosted_candidates(text_ret, query, top_k=30):
     merge(all_302, result.get("bls302", []))
     merge(all_40, result.get("bls40", []))
 
+    def _trigger_matches(trigger, text):
+        """Check if trigger matches in text. Short triggers use word boundaries."""
+        if len(trigger) <= 4:
+            return bool(re.search(r'(?<!\w)' + re.escape(trigger) + r'(?!\w)', text))
+        return trigger in text
+
     query_lower = query.lower().strip()
     for trigger, expansions in CONCEPT_EXPANSION.items():
-        if trigger in query_lower:
+        if not _trigger_matches(trigger, query_lower):
+            continue
             for exp in expansions[:5]:
                 try:
                     r = text_ret.search(exp, top_k=5)
@@ -406,6 +441,24 @@ def get_boosted_candidates(text_ret, query, top_k=30):
                 merge(all_40, r.get("bls40", []), 0.85)
             except Exception:
                 pass
+
+    # ── Claude query expansion (only when retriever is struggling) ──
+    if expander is not None:
+        best_302 = max(((c.to_dict() if hasattr(c, "to_dict") else c)["score"]
+                        for c in all_302.values()), default=0)
+        best_40 = max(((c.to_dict() if hasattr(c, "to_dict") else c)["score"]
+                       for c in all_40.values()), default=0)
+        if best_302 < 1.5 or best_40 < 1.5:
+            expansion_terms = expander.expand(query)
+            for term in expansion_terms:
+                try:
+                    r = text_ret.search(term, top_k=5)
+                    if best_302 < 1.5:
+                        merge(all_302, r.get("bls302", []), 0.95)
+                    if best_40 < 1.5:
+                        merge(all_40, r.get("bls40", []), 0.95)
+                except Exception:
+                    pass
 
     def sort_trim(d, k):
         items = sorted(d.values(), key=lambda x: (x.to_dict() if hasattr(x, "to_dict") else x)["score"], reverse=True)
@@ -469,6 +522,16 @@ with st.sidebar:
         "</div>", unsafe_allow_html=True
     )
 
+    # Unmatched foods list
+    if st.session_state.unmatched_foods:
+        st.markdown("---")
+        st.markdown("### Unmatched Foods")
+        for uf in st.session_state.unmatched_foods:
+            st.markdown(f"- {uf}")
+        if st.button("Clear list", key="clear_unmatched"):
+            st.session_state.unmatched_foods = []
+            st.rerun()
+
 
 # ═══════════════════════════════════════════════════════════
 #  Main area
@@ -493,8 +556,18 @@ if not query:
     )
 
 if query:
+    # Check verified maps — skip expansion if both versions are verified
+    from modules.verified_map import VERIFIED_MAP_302
+    from modules.verified_map_40 import VERIFIED_MAP_40
+    _is_verified = (query.lower().strip() in VERIFIED_MAP_302
+                    and query.lower().strip() in VERIFIED_MAP_40)
+
+    expander = None
+    if use_claude and _api_key and not _is_verified:
+        expander = get_expander(_api_key)
+
     with st.spinner("Searching BLS catalogs..."):
-        candidates = get_boosted_candidates(text_ret, query, top_k=30)
+        candidates = get_boosted_candidates(text_ret, query, top_k=30, expander=expander)
     nq = candidates["query"]
 
     # ── Resolve matches ──
@@ -536,6 +609,29 @@ if query:
                             claude_nova=claude_nova, used_claude=result_from_claude)
     st.markdown("##### Summary", unsafe_allow_html=True)
     st.markdown(render_summary_table(row), unsafe_allow_html=True)
+
+    # ── Confidence warning banner ──
+    top1_conf_302 = result.bls302_matches[0].confidence if result.bls302_matches else 0
+    top1_conf_40 = result.bls40_matches[0].confidence if result.bls40_matches else 0
+    top1_conf = max(top1_conf_302, top1_conf_40)
+
+    if top1_conf < 0.30:
+        st.markdown(
+            '<div class="match-warning match-warning-red">'
+            "No suitable BLS match found for this food item. Consider: "
+            "(1) rephrasing the food description more specifically, or "
+            "(2) decomposing into individual ingredients.</div>",
+            unsafe_allow_html=True,
+        )
+        if query not in st.session_state.unmatched_foods:
+            st.session_state.unmatched_foods.append(query)
+    elif top1_conf < 0.60:
+        st.markdown(
+            '<div class="match-warning match-warning-orange">'
+            "No exact match found. Closest alternative shown "
+            "— manual review recommended.</div>",
+            unsafe_allow_html=True,
+        )
 
     # ── Status bar: source + safety + re-query ──
     src302 = getattr(result, "bls302_source", "")
