@@ -254,6 +254,69 @@ SYNONYM_MAP: dict[str, str] = {
     "mehl":         "weizenmehl",
     "paniermehl":   "paniermehl semmelbrösel",
     "maggi":        "grundsoße braun trockenprodukt",
+
+    # Regional/dialectal German
+    "semmel":       "weizenbrötchen brötchen",
+    "breze":        "laugenbrezel brezel",
+    "brezn":        "laugenbrezel brezel",
+    "fleischpflanzerl": "frikadelle bulette",
+    "fleischküchle": "frikadelle bulette",
+    "leberkas":     "leberkäse fleischkäse",
+    "palatschinken": "pfannkuchen crêpe",
+    "knödel":       "kloß klöße",
+    "rahm":         "sahne schmand",
+    "topfen":       "quark speisequark",
+    "karfiol":      "blumenkohl",
+    "paradeiser":   "tomate",
+    "erdäpfel":     "kartoffel",
+    "marille":      "aprikose",
+    "ribisel":      "johannisbeere",
+    "zwetschke":    "zwetschge pflaume",
+    "krautwickel":  "kohlroulade kohlwickel",
+
+    # Italian
+    "risotto":      "reisgericht reis gekocht",
+    "ciabatta":     "weizenbrot weißbrot",
+    "bruschetta":   "röstbrot tomate weißbrot",
+    "focaccia":     "fladenbrot olivenöl weißbrot",
+    "calzone":      "pizza gefüllt teigtasche",
+    "tiramisu":     "mascarpone dessert löffelbiskuit",
+    "panna cotta":  "sahne pudding sahnedessert",
+    "antipasti":    "eingelegtes gemüse mariniert",
+
+    # Greek/Turkish/Middle Eastern
+    "langos":       "hefeteig frittiert fladenbrot",
+    "baklava":      "blätterteig nüsse honig gebäck",
+    "börek":        "blätterteig käse teigtasche",
+    "lahmacun":     "fladenbrot hackfleisch",
+
+    # Asian
+    "ramen":        "nudelsuppe japanisch",
+    "pad thai":     "reisnudeln gebraten nudelgericht",
+    "dim sum":      "teigtaschen gedämpft",
+    "naan":         "fladenbrot indisch weizenfladenbrot",
+    "samosa":       "teigtasche frittiert",
+    "bibimbap":     "reisgericht gemüse",
+    "onigiri":      "reisbällchen reis",
+
+    # Mexican/American
+    "quesadilla":   "tortilla käse überbacken",
+    "nachos":       "tortillachips maischips",
+    "brownie":      "schokoladenkuchen schokogebäck",
+    "bagel":        "hefeteigring weizenbrötchen",
+    "pancake":      "pfannkuchen eierkuchen",
+    "pancakes":     "pfannkuchen eierkuchen",
+    "cookie":       "keks gebäck",
+    "cookies":      "keks gebäck",
+    "cheesecake":   "käsekuchen quarkkuchen",
+
+    # French
+    "croque monsieur": "toast schinken käse überbacken",
+    "quiche":       "eierkuchen herzhaft mürbeteig",
+    "crêpe":        "pfannkuchen dünn eierkuchen",
+    "crepe":        "pfannkuchen dünn eierkuchen",
+    "mousse au chocolat": "schokoladenmousse schokoladencreme",
+    "gratin":       "auflauf überbacken käse",
 }
 
 # English → German food terms (for the ~5% English descriptions)
@@ -355,6 +418,7 @@ BRAND_MAP: dict[str, str] = {
     "wagner":        "pizza tiefkühl",
     # Spreads / fats
     "rama":          "margarine halbfett",
+    "rama cremefine": "sahne kochsahne",
     "meggle":        "butter",
     "lätta":         "margarine halbfett",
     "kerrygold":     "butter",
@@ -386,10 +450,15 @@ BRAND_MAP: dict[str, str] = {
     "pringles":      "kartoffelchips",
     "magnum":        "milchspeiseeis",
     "duplo":         "schokoriegel waffel",
-    "hanuta":        "waffel haselnuss",
+    "manner":        "waffelkeks neapolitaner",
+    "mannerwaffel":  "waffelkeks neapolitaner",
+    "yogurette":     "schokoriegel joghurtfüllung erdbeere",
+    "hanuta":        "waffelschnitte haselnuss",
     "knoppers":      "waffel milchcreme",
     "ferrero":       "praline schokolade",
     "kinder":        "schokolade milchcreme",
+    "kinder bueno":  "schokoriegel milchcreme",
+    "kinder pingui": "schokoriegel milchcreme",
     "kinderschokolade": "schokolade milchcreme",
     "corny":         "müsliriegel",
     "ritter sport":  "schokolade tafelschokolade",
@@ -459,6 +528,34 @@ BRAND_MAP: dict[str, str] = {
     "ja!":           "",
     "gut & günstig":  "",
     "demeter":       "",
+    # Fast food chains
+    "mcdonalds":     "fast food hamburger",
+    "mcdonald's":    "fast food hamburger",
+    "mc donalds":    "fast food hamburger",
+    "burger king":   "fast food hamburger",
+    "subway":        "sandwich baguette gefüllt",
+    # Coffee chains
+    "starbucks":     "kaffeegetränk milch",
+    "costa coffee":  "kaffeegetränk milch",
+    "costa":         "kaffeegetränk milch",
+    # Additional brands
+    "capri sun":     "fruchtsaftgetränk",
+    "capri sonne":   "fruchtsaftgetränk",
+    "hohes c":       "orangensaft fruchtsaft",
+    "granini":       "fruchtsaft",
+    "müllermilch":   "milchmischgetränk",
+    "fruchtzwerge":  "fruchtquark kinder",
+    "bresso":        "weichkäse kräuter",
+    "buko":          "frischkäse",
+    "bertolli":      "olivenöl",
+    "wagner pizza":  "tiefkühlpizza",
+    "original wagner": "tiefkühlpizza",
+    "dr. oetker ristorante": "tiefkühlpizza",
+    "maggi fix":     "fertiggericht würzmischung",
+    "knorr fix":     "fertiggericht würzmischung",
+    "tuc":           "cracker salzig",
+    "hafer-crunch":  "knuspermüsli hafer",
+    "hafer crunch":  "knuspermüsli hafer",
 }
 
 # Preparation-state keywords to detect and extract
@@ -601,11 +698,10 @@ def normalize(text: str) -> NormalizedQuery:
             result.prep_state = canonical
             break  # take the first (most specific) match
 
-    # 5. Detect brand names
-    for brand, generic in BRAND_MAP.items():
+    # 5. Detect brand names (longest match first to prefer "rama cremefine" over "rama")
+    for brand in sorted(BRAND_MAP.keys(), key=len, reverse=True):
         if brand in working:
             result.brand = brand
-            # Don't replace yet — we want the brand context for search variants
             break
 
     # 6. Strip parentheticals (but we already extracted fat% and prep from them)
