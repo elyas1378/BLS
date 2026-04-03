@@ -493,31 +493,79 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             if code not in target or score > (target[code].to_dict() if hasattr(target[code], "to_dict") else target[code])["score"]:
                 target[code] = c
 
-    result = text_ret.search(query, top_k=20)
+    # Strip noise words that add no search value
+    _NOISE = {"selbstgemachte", "selbstgemachter", "selbstgemachtes", "selbstgemacht",
+              "hausgemacht", "hausgemachte", "hausgemachter", "homemade",
+              "frische", "frischer", "frisches"}
+    query_clean = query
+    for noise in _NOISE:
+        query_clean = re.sub(r'\b' + re.escape(noise) + r'\b', '', query_clean, flags=re.IGNORECASE)
+    query_clean = re.sub(r'\s+', ' ', query_clean).strip()
+
+    # Split into main dish + modifiers at connectors
+    _CONNECTORS = r'\s+(?:mit|und|aus|in|auf|ohne|an|nach|vom|zum|dazu|plus|à la)\s+'
+    dish_parts = re.split(_CONNECTORS, query_clean, maxsplit=1, flags=re.IGNORECASE)
+    main_dish = dish_parts[0].strip()
+    modifier_phrases = dish_parts[1].strip() if len(dish_parts) > 1 else ""
+
+    # Search main dish at full weight
+    result = text_ret.search(main_dish, top_k=20)
     merge(all_302, result.get("bls302", []))
     merge(all_40, result.get("bls40", []))
 
+    # Also search full query if different from main dish
+    if query_clean != main_dish:
+        result_full = text_ret.search(query_clean, top_k=20)
+        merge(all_302, result_full.get("bls302", []))
+        merge(all_40, result_full.get("bls40", []))
+
+    # Search modifier phrases at reduced weight
+    if modifier_phrases:
+        mod_parts = re.split(r'\s*[,;]\s*|\s+und\s+', modifier_phrases)
+        for part in [p.strip() for p in mod_parts[:4] if len(p.strip()) >= 3]:
+            try:
+                r = text_ret.search(part, top_k=5)
+                merge(all_302, r.get("bls302", []), 0.5)
+                merge(all_40, r.get("bls40", []), 0.5)
+            except Exception:
+                pass
+
+    # Concept expansion — match triggers against multiple forms of the query
     def _trigger_matches(trigger, text):
-        """Check if trigger matches in text. Short triggers use word boundaries."""
+        """Check if trigger matches in text. Handles compounds, hyphens, spaces."""
         if len(trigger) <= 4:
             return bool(re.search(r'(?<!\w)' + re.escape(trigger) + r'(?!\w)', text))
-        return trigger in text
+        # Try exact substring
+        if trigger in text:
+            return True
+        # Try with hyphens removed (schoko-orange-mousse → schokoorangemousse)
+        text_nohyph = text.replace("-", "")
+        trigger_nohyph = trigger.replace("-", "")
+        if trigger_nohyph in text_nohyph:
+            return True
+        # Try with hyphens as spaces
+        text_spaces = text.replace("-", " ")
+        trigger_spaces = trigger.replace("-", " ")
+        if trigger_spaces in text_spaces:
+            return True
+        return False
 
-    query_lower = query.lower().strip()
+    query_lower = query_clean.lower().strip()
     for trigger, expansions in CONCEPT_EXPANSION.items():
         if not _trigger_matches(trigger, query_lower):
             continue
-            for exp in expansions[:5]:
-                try:
-                    r = text_ret.search(exp, top_k=5)
-                    merge(all_302, r.get("bls302", []), 0.9)
-                    merge(all_40, r.get("bls40", []), 0.9)
-                except Exception:
-                    pass
+        for exp in expansions[:5]:
+            try:
+                r = text_ret.search(exp, top_k=5)
+                merge(all_302, r.get("bls302", []), 0.9)
+                merge(all_40, r.get("bls40", []), 0.9)
+            except Exception:
+                pass
 
-    parts = re.split(r'\s*[,;]\s*|\s+und\s+|\s+mit\s+', query)
-    if len(parts) > 1:
-        for part in [p.strip() for p in parts[:4] if len(p.strip()) >= 3]:
+    # Multi-ingredient sub-query split (comma/semicolon only — connectors already handled above)
+    comma_parts = re.split(r'\s*[,;]\s*', query_clean)
+    if len(comma_parts) > 1:
+        for part in [p.strip() for p in comma_parts[:4] if len(p.strip()) >= 3]:
             try:
                 r = text_ret.search(part, top_k=5)
                 merge(all_302, r.get("bls302", []), 0.85)
