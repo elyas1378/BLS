@@ -31,6 +31,161 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config.settings import CATALOG_302, CATALOG_40
 
 
+# ═══════════════════════════════════════════
+#  German compound word splitter
+# ═══════════════════════════════════════════
+
+# Common German food morphemes — word parts that appear in compound words.
+# Sorted longest-first so greedy matching picks the longest part.
+_MORPHEMES = sorted([
+    # Food types / dish forms
+    "brötchen", "brot", "kuchen", "waffel", "stange", "suppe", "soße",
+    "aufstrich", "füllung", "stampf", "püree", "salat", "mousse", "creme",
+    "curry", "wickel", "auflauf", "pfanne", "bowl", "crunch", "riegel",
+    "eintopf", "gulasch", "lasagne", "gratin", "pesto", "dressing",
+    "aufschnitt", "pastete", "knödel", "kloß", "nockerl", "strudel",
+    "fladen", "tortilla", "wrap", "burger", "nuggets", "schnitzel",
+    "frikadelle", "bulette", "rösti", "pommes", "chips", "cracker",
+    "müsli", "porridge", "smoothie", "shake", "joghurt", "quark",
+    "pudding", "eis", "torte", "praline", "bonbon", "dragee",
+    "konfitüre", "marmelade", "gelee", "kompott", "mus",
+    "teig", "sauerteig", "blätterteig", "hefeteig", "mürbeteig",
+    # Liquids
+    "saft", "schorle", "milch", "drink", "tee", "kaffee", "wasser",
+    "sirup", "brühe", "fond",
+    # Ingredients / processing
+    "mehl", "flocken", "samen", "schalen", "pulver", "extrakt",
+    "öl", "fett", "butter", "schmalz", "essig",
+    "zucker", "honig", "salz", "senf", "ketchup",
+    # Grains
+    "hafer", "roggen", "weizen", "dinkel", "gerste", "hirse",
+    "buchweizen", "amaranth", "quinoa", "mais", "reis",
+    # Vegetables
+    "kartoffel", "karotten", "karotte", "tomaten", "tomate",
+    "spinat", "kürbis", "artischocke", "artischocken",
+    "zwiebel", "knoblauch", "lauch", "paprika", "gurke", "gurken",
+    "brokkoli", "blumenkohl", "kohlrabi", "rosenkohl", "rotkohl",
+    "weißkohl", "spargel", "fenchel", "sellerie", "rucola",
+    "champignon", "pilz", "erbsen", "bohnen", "linsen",
+    "zucchini", "aubergine", "radieschen",
+    "kümmel", "schwarzkümmel", "maronen", "kastanien", "pastinake",
+    # Fruits
+    "apfel", "birne", "kirsche", "pflaume", "zwetschge", "beeren",
+    "beere", "erdbeere", "himbeere", "heidelbeere", "johannisbeere",
+    "orange", "zitrone", "banane", "mango", "ananas", "melone",
+    "traube", "feige", "dattel", "cranberry",
+    # Nuts/seeds
+    "nuss", "nüsse", "mandel", "mandeln", "haselnuss", "walnuss",
+    "cashew", "erdnuss", "pistazie", "sesam", "mohn", "kokos",
+    "kürbiskern", "sonnenblumenkern", "leinsamen", "flohsamen",
+    # Protein
+    "schinken", "käse", "fleisch", "hack", "wurst", "speck",
+    "lachs", "thunfisch", "hering", "forelle", "garnele",
+    "hähnchen", "pute", "rind", "schwein", "kalb", "lamm",
+    "ei", "eier",
+    # Dairy
+    "sahne", "schmand", "frischkäse", "mozzarella", "parmesan",
+    "gouda", "emmentaler", "camembert", "feta",
+    # Sweets/flavorings
+    "schoko", "schokolade", "vanille", "karamell", "zimt",
+    "nougat", "marzipan", "krokant",
+    # Descriptors
+    "vollkorn", "voll", "korn", "braun", "schwarz", "weiß", "rot",
+    "grün", "dunkel", "hell", "fein", "grob", "zart", "bitter",
+    "natur", "bio", "frisch", "trocken", "geräuchert",
+    # Regions/styles
+    "toskana", "griechisch", "italienisch", "asiatisch",
+    # Misc
+    "gemüse", "obst", "kräuter", "gewürz",
+    "protein", "vitamin", "mineral", "energie",
+    "mann", "manner", "maggi", "knorr",
+], key=len, reverse=True)
+
+
+# Weak modifiers: generic descriptors that should never be the sole match reason
+_WEAK_MODIFIERS = {
+    # Colors
+    "braun", "schwarz", "weiß", "rot", "grün", "gelb", "blau",
+    "dunkel", "hell",
+    # Size/texture
+    "groß", "klein", "fein", "grob", "zart", "dick", "dünn",
+    "rund", "lang",
+    # Taste
+    "bitter", "süß", "salzig", "scharf", "mild", "sauer",
+    # State
+    "frisch", "alt", "neu", "warm", "kalt", "heiß", "roh", "gar",
+    # Amount
+    "voll", "halb", "ganz", "extra", "mini", "maxi",
+}
+
+
+def split_compound(word: str) -> list[str]:
+    """Split a German compound food word into meaningful morphemes.
+
+    Always splits on hyphens. For non-hyphenated compounds >= 8 chars,
+    tries greedy left-to-right morpheme matching.
+
+    Returns list of parts, or [word] if no split found.
+    """
+    word_lower = word.lower().strip()
+
+    # Step 1: Split on hyphens
+    if "-" in word_lower:
+        parts = [p.strip() for p in word_lower.split("-") if p.strip()]
+        # Recursively split each part if it's a long compound
+        result = []
+        for part in parts:
+            if len(part) >= 8:
+                sub = _split_no_hyphen(part)
+                result.extend(sub)
+            else:
+                result.append(part)
+        return result if len(result) > 1 else [word_lower]
+
+    # Step 2: Non-hyphenated compounds
+    if len(word_lower) >= 8:
+        parts = _split_no_hyphen(word_lower)
+        if len(parts) > 1:
+            return parts
+
+    return [word_lower]
+
+
+def _split_no_hyphen(word: str) -> list[str]:
+    """Try to split a non-hyphenated compound word using morpheme list."""
+    parts = []
+    pos = 0
+    while pos < len(word):
+        matched = False
+        # Try longest morpheme first (list is sorted longest-first)
+        for morph in _MORPHEMES:
+            if word[pos:].startswith(morph):
+                parts.append(morph)
+                pos += len(morph)
+                # Skip linking letters (common: 's', 'n', 'en')
+                if pos < len(word) and word[pos] in ('s', 'n') and pos + 1 < len(word):
+                    # Check if skipping this letter leads to another morpheme match
+                    skip = 1
+                    if word[pos:pos+2] == 'en':
+                        skip = 2
+                    remaining = word[pos+skip:]
+                    if any(remaining.startswith(m) for m in _MORPHEMES):
+                        pos += skip
+                matched = True
+                break
+        if not matched:
+            # No morpheme matched at this position — unsplittable remainder
+            remainder = word[pos:]
+            if remainder and len(remainder) >= 3:
+                parts.append(remainder)
+            pos = len(word)
+
+    # Only return split if we got at least 2 meaningful parts
+    if len(parts) >= 2 and all(len(p) >= 2 for p in parts):
+        return parts
+    return [word]
+
+
 @dataclass
 class TextCandidate:
     code: str
@@ -109,6 +264,19 @@ class TextMatchRetriever:
         query_words = set(re.findall(r'\w+', query_lower))
         query_words = {w for w in query_words if len(w) >= 3}
 
+        # Expand query words with compound splits + head/modifier tagging
+        compound_parts = set()
+        compound_heads = set()   # last part of each compound (the "what")
+        compound_mods = set()    # earlier parts (the "which kind")
+        for w in list(query_words):
+            parts = split_compound(w)
+            if len(parts) > 1:
+                valid = [p for p in parts if len(p) >= 3]
+                compound_parts.update(valid)
+                if valid:
+                    compound_heads.add(valid[-1])        # last = head
+                    compound_mods.update(valid[:-1])     # rest = modifiers
+
         candidates = {}  # code → (score, row, match_type)
 
         # ── Strategy 1: Exact match ──
@@ -119,7 +287,8 @@ class TextMatchRetriever:
         # ── Strategy 2: Word-based retrieval ──
         # Find all entries that share at least one word with the query
         candidate_indices = set()
-        for word in query_words:
+        all_search_words = query_words | compound_parts
+        for word in all_search_words:
             if word in word_index:
                 candidate_indices.update(word_index[word])
             # Also try prefix matching for partial words
@@ -146,11 +315,35 @@ class TextMatchRetriever:
             elif name_lower in query_lower:
                 score += 0.6
 
-            # Word overlap
+            # Word overlap (original query words)
             name_words = set(row["name_words"]) if isinstance(row["name_words"], list) else set()
             overlap = query_words & name_words
             if overlap:
                 score += 0.3 * len(overlap) / max(len(query_words), 1)
+
+            # Compound part overlap with head/modifier weighting
+            if compound_parts:
+                comp_overlap = compound_parts & name_words
+                if comp_overlap:
+                    score += 0.255 * len(comp_overlap) / max(len(compound_parts), 1)
+
+                    # Head/modifier grammar weighting
+                    head_matched = bool(compound_heads & name_words)
+                    mod_matched = bool(compound_mods & name_words)
+                    if head_matched and mod_matched:
+                        score += 0.10   # both head + modifier = best match
+                    elif not head_matched and mod_matched:
+                        score -= 0.20   # only modifier, missed head = poor match
+                else:
+                    # No compound overlap at all — check if only weak modifiers match
+                    pass
+
+            # Weak modifier penalty: if the ONLY reason this candidate appeared
+            # is a generic descriptor word, penalize it
+            if compound_mods:
+                all_matching = (query_words | compound_parts) & name_words
+                if all_matching and all_matching.issubset(_WEAK_MODIFIERS):
+                    score -= 0.25
 
             # Fuzzy string similarity (weighted higher to catch 1-2 char typos)
             sim = SequenceMatcher(None, query_lower, name_lower).ratio()
@@ -178,10 +371,11 @@ class TextMatchRetriever:
                     sim = SequenceMatcher(None, query_lower, row["name_lower"]).ratio()
                     candidates[code] = (sim + 0.3, row, "substring")
 
-        # ── Apply BLS domain rules to adjust scores ──
+        # ── Apply BLS domain rules + suffix boosting ──
         scored = []
         for code, (score, row, match_type) in candidates.items():
-            adjusted = self._apply_bls_rules(score, code, row, query_lower)
+            adjusted = self._apply_bls_rules(score, code, row, query_lower,
+                                             compound_parts)
             scored.append((adjusted, code, row, match_type))
 
         # Sort by adjusted score
@@ -202,11 +396,14 @@ class TextMatchRetriever:
             ))
         return results
 
-    def _apply_bls_rules(self, score: float, code: str, row, query: str) -> float:
-        """Apply BLS code structure rules to adjust candidate scores."""
+    def _apply_bls_rules(self, score: float, code: str, row, query: str,
+                         compound_parts: set = None) -> float:
+        """Apply BLS code structure rules + suffix category boosting."""
         name = row["name_lower"]
         group = code[0]
         proc = code[-1]
+        if compound_parts is None:
+            compound_parts = set()
 
         # ── Penalize broad category headers ──
         if code.endswith("00000"):
@@ -275,6 +472,89 @@ class TextMatchRetriever:
             score -= 0.15
         if "getrocknet" in name and "getrocknet" not in query and "trocken" not in query:
             score -= 0.1
+
+        # ═══════════════════════════════════════════
+        #  Suffix category boosting
+        # ═══════════════════════════════════════════
+
+        # Collect all words to check for suffixes: query words + compound parts
+        all_words = set(re.findall(r'\w+', query)) | compound_parts
+        query_full = query  # keep original for context checks
+
+        # Suffix → (boost_groups, boost_amount, name_keyword_required)
+        _SUFFIX_RULES = {
+            "aufstrich":  ({"Q", "R"}, 0.20, None),
+            "suppe":      ({"X", "Y"}, 0.20, "suppe"),
+            "eintopf":    ({"X", "Y"}, 0.20, "eintopf"),
+            "brot":       ({"B"},      0.25, None),
+            "brötchen":   ({"B"},      0.25, None),
+            "kuchen":     ({"D"},      0.20, None),
+            "torte":      ({"D"},      0.20, None),
+            "saft":       ({"N", "F"}, 0.20, None),
+            "schorle":    ({"N"},      0.20, None),
+            "getränk":    ({"N"},      0.20, None),
+            "drink":      ({"N", "H"}, 0.20, None),
+            "öl":         ({"Q"},      0.25, None),
+            "salat":      (None,       0.15, "salat"),  # any group with "salat" in name
+            "stampf":     ({"K", "X"}, 0.20, None),
+            "püree":      ({"K", "X"}, 0.20, None),
+            "mousse":     ({"S", "D"}, 0.15, None),
+            "creme":      ({"S", "M"}, 0.15, None),
+            "pudding":    ({"S"},      0.15, None),
+            "eis":        ({"S"},      0.15, None),
+            "wurst":      ({"W"},      0.20, None),
+            "curry":      ({"X", "Y"}, 0.15, None),
+            "pfanne":     ({"X", "Y"}, 0.15, None),
+            "auflauf":    ({"X", "Y"}, 0.15, None),
+            "gratin":     ({"X", "Y"}, 0.15, None),
+        }
+
+        for word in all_words:
+            for suffix, (boost_groups, boost_amt, name_kw) in _SUFFIX_RULES.items():
+                if word.endswith(suffix) and word != suffix:
+                    # Suffix matched — apply boost or penalty
+                    if name_kw:
+                        # Boost if the BLS name contains the keyword
+                        if name_kw in name:
+                            score += boost_amt
+                    elif boost_groups and group in boost_groups:
+                        score += boost_amt
+                    elif boost_groups and group not in boost_groups:
+                        # Mild penalty for wrong category
+                        score -= 0.08
+                    break  # one suffix match per word
+
+        # "-milch" suffix: boost N (beverages) but NOT for "buttermilch"
+        for word in all_words:
+            if word.endswith("milch") and word != "milch" and word != "buttermilch":
+                if group in ("N", "H", "C"):
+                    score += 0.20
+                break
+
+        # ── Context-aware penalties ──
+
+        # "gemüse" + recipe suffix → penalize meat categories
+        if "gemüse" in query_full:
+            has_recipe_suffix = any(
+                w.endswith(s) for w in all_words
+                for s in ("curry", "pfanne", "auflauf", "eintopf")
+            )
+            if has_recipe_suffix and group in ("U", "V", "W", "Y"):
+                score -= 0.15
+
+        # "heiße"/"heißer"/"heißes" → boost beverages
+        if any(h in query_full for h in ("heiße", "heißer", "heißes")):
+            if group == "N":
+                score += 0.25
+            elif group in ("B", "D", "S", "U", "V", "W"):
+                score -= 0.10
+
+        # "zero"/"light"/"zuckerfrei"/"kalorienarm" → boost diet variants
+        if any(d in query_full for d in ("zero", "light", "zuckerfrei",
+                                          "kalorienarm", "ohne zucker")):
+            if any(d in name for d in ("light", "kalorienreduziert",
+                                        "süßstoff", "zuckerfrei", "kalorienarm")):
+                score += 0.15
 
         return score
 
