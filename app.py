@@ -569,6 +569,82 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             except Exception:
                 pass
 
+    # ── Vocab-based compound fallback for unknown long tokens ──
+    if any_unknown:
+        from difflib import get_close_matches as _dfm
+        _vset = get_vocab_set()
+        _vlst = sorted(_vset)
+
+        def _vocab_compound_split(word):
+            """Split a compound word against BLS vocabulary.
+            Returns list of (component, quality) or None.
+            quality: 2 = both halves food words, 1 = only one half."""
+            w = word.lower()
+            if w in _vset or len(w) < 6:
+                return None
+            _JOINERS = ["", "s", "n", "en", "e", "er"]
+            both_match = []
+            one_match = []
+            for i in range(3, len(w) - 2):
+                left = w[:i]
+                remainder = w[i:]
+                for joiner in _JOINERS:
+                    if joiner:
+                        if not remainder.startswith(joiner):
+                            continue
+                        right = remainder[len(joiner):]
+                    else:
+                        right = remainder
+                    if len(right) < 3:
+                        continue
+                    left_in = left in _vset
+                    right_in = right in _vset
+                    left_resolved = left
+                    right_resolved = right
+                    if not left_in and len(left) >= 4:
+                        fm = _dfm(left, _vlst, n=1, cutoff=0.85)
+                        if fm and min(len(left), len(fm[0])) / max(len(left), len(fm[0])) >= 0.5:
+                            left_resolved = fm[0]
+                            left_in = True
+                    if not right_in and len(right) >= 4:
+                        fm = _dfm(right, _vlst, n=1, cutoff=0.85)
+                        if fm and min(len(right), len(fm[0])) / max(len(right), len(fm[0])) >= 0.5:
+                            right_resolved = fm[0]
+                            right_in = True
+                    if left_in and right_in:
+                        both_match.append((left_resolved, right_resolved,
+                                           len(left_resolved) * len(right_resolved)))
+                    elif left_in:
+                        one_match.append((left_resolved,))
+                    elif right_in:
+                        one_match.append((right_resolved,))
+            if both_match:
+                best = max(both_match, key=lambda x: x[2])
+                return [(best[0], 2), (best[1], 2)]
+            if one_match:
+                seen = {}
+                for parts in one_match:
+                    c = parts[0]
+                    if c not in seen or len(c) > len(seen[c]):
+                        seen[c] = c
+                longest = max(seen.values(), key=len)
+                return [(longest, 1)]
+            return None
+
+        query_tokens = re.findall(r'\w+', corrected_query.lower())
+        for token in query_tokens:
+            if len(token) >= 6 and token not in _vset and " " not in token:
+                split_result = _vocab_compound_split(token)
+                if split_result:
+                    for comp, quality in split_result:
+                        weight = 0.40 if quality == 2 else 0.25
+                        try:
+                            r = text_ret.search(comp, top_k=10)
+                            merge(all_302, r.get("bls302", []), weight)
+                            merge(all_40, r.get("bls40", []), weight)
+                        except Exception:
+                            pass
+
     # Concept expansion — match triggers against multiple forms of the query
     def _trigger_matches(trigger, text):
         """Check if trigger matches in text. Handles compounds, hyphens, spaces."""
@@ -629,6 +705,43 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
                         merge(all_40, r.get("bls40", []), 0.95)
                 except Exception:
                     pass
+
+    # ── Cross-version bootstrapping ──
+    _best_302 = max(((c.to_dict() if hasattr(c, "to_dict") else c)["score"]
+                     for c in all_302.values()), default=0)
+    _best_40 = max(((c.to_dict() if hasattr(c, "to_dict") else c)["score"]
+                    for c in all_40.values()), default=0)
+    _STRONG, _WEAK = 0.8, 0.5
+    _STOP_WORDS = {"mit", "und", "aus", "von", "für", "ohne", "roh", "fett",
+                   "gegart", "gekocht", "gebraten", "roh"}
+
+    if _best_302 >= _STRONG and _best_40 < _WEAK:
+        best_entry = max(all_302.values(),
+                         key=lambda c: (c.to_dict() if hasattr(c, "to_dict") else c)["score"])
+        best_name = (best_entry.to_dict() if hasattr(best_entry, "to_dict") else best_entry)["name_de"]
+        words = [w for w in re.findall(r'\w+', best_name.lower())
+                 if len(w) >= 3 and w not in _STOP_WORDS]
+        search_term = " ".join(words[:3])
+        if search_term:
+            try:
+                r = text_ret.search(search_term, top_k=10)
+                merge(all_40, r.get("bls40", []), 0.70)
+            except Exception:
+                pass
+
+    elif _best_40 >= _STRONG and _best_302 < _WEAK:
+        best_entry = max(all_40.values(),
+                         key=lambda c: (c.to_dict() if hasattr(c, "to_dict") else c)["score"])
+        best_name = (best_entry.to_dict() if hasattr(best_entry, "to_dict") else best_entry)["name_de"]
+        words = [w for w in re.findall(r'\w+', best_name.lower())
+                 if len(w) >= 3 and w not in _STOP_WORDS]
+        search_term = " ".join(words[:3])
+        if search_term:
+            try:
+                r = text_ret.search(search_term, top_k=10)
+                merge(all_302, r.get("bls302", []), 0.70)
+            except Exception:
+                pass
 
     def sort_trim(d, k):
         items = sorted(d.values(), key=lambda x: (x.to_dict() if hasattr(x, "to_dict") else x)["score"], reverse=True)
