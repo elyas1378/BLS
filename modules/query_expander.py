@@ -95,6 +95,102 @@ class QueryExpander:
         except Exception:
             return []
 
+    # ── V2: Combined spelling + expansion ──
+
+    _V2_SYSTEM = (
+        "You are a German food database expert. Given a food description "
+        "from a nutrition study participant:\n"
+        "1. Correct any spelling errors in the food description.\n"
+        "2. Generate 5-8 German search terms that would help find this food "
+        "in the BLS (Bundeslebensmittelschlüssel) food database.\n\n"
+        "Include: the corrected name, common German synonyms, "
+        "brand-to-generic-product mappings, English-to-German translations, "
+        "and for composite foods also list the individual components.\n\n"
+        'Respond ONLY with JSON, no markdown, no explanation:\n'
+        '{"corrected": "corrected food description", '
+        '"search_terms": ["term1", "term2", ...]}'
+    )
+
+    def expand_with_spelling(
+        self,
+        food_description: str,
+        unknown_tokens: list[str] | None = None,
+    ) -> dict:
+        """Combined spelling correction + search term expansion.
+
+        Called BEFORE retrieval when Tier 1 flags unknown tokens.
+
+        Returns dict with:
+            "corrected": str — spelling-corrected food description
+            "search_terms": list[str] — BLS search terms
+        """
+        cache_key = "v2:" + food_description.strip().lower()
+
+        # Check cache
+        if cache_key in self._cache:
+            cached = self._cache[cache_key]
+            if isinstance(cached, dict):
+                return cached
+
+        # Build user prompt
+        user_msg = f'Food description: "{food_description}"'
+        if unknown_tokens:
+            user_msg += f"\nUnknown tokens that need attention: {unknown_tokens}"
+
+        fallback = {"corrected": food_description, "search_terms": []}
+
+        try:
+            response = self.client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=200,
+                system=self._V2_SYSTEM,
+                messages=[{"role": "user", "content": user_msg}],
+                temperature=0.0,
+            )
+
+            text = response.content[0].text.strip()
+
+            # Strip markdown fences if present
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                text = text.strip()
+                if text.startswith("json"):
+                    text = text[4:].strip()
+
+            # Parse JSON
+            try:
+                result = json.loads(text)
+                if not isinstance(result, dict):
+                    raise ValueError("not a dict")
+                # Ensure expected keys
+                result.setdefault("corrected", food_description)
+                result.setdefault("search_terms", [])
+                # Filter search terms
+                result["search_terms"] = [
+                    t for t in result["search_terms"]
+                    if isinstance(t, str) and len(t) >= 2
+                ]
+            except (json.JSONDecodeError, ValueError):
+                # Fallback: treat as line-separated search terms (old format)
+                terms = [
+                    line.strip().lstrip("0123456789.-) ")
+                    for line in text.split("\n")
+                ]
+                terms = [t for t in terms if t and len(t) >= 2]
+                result = {"corrected": food_description, "search_terms": terms}
+
+            # Cache
+            with self._lock:
+                self._cache[cache_key] = result
+                self._save_cache()
+
+            return result
+
+        except Exception:
+            return fallback
+
     @property
     def cache_size(self) -> int:
         return len(self._cache)

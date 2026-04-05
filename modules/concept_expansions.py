@@ -640,4 +640,5 @@ CONCEPT_EXPANSION = {
     "rama cremefine": ["sahne kochsahne", "sahneersatz"],
     "mannerwaffel": ["waffelkeks neapolitaner", "waffelschnitten"],
     "yogurette": ["schokoriegel joghurtfüllung", "erdbeer schokoriegel"],
+    "grillfackeln": ["mariniertes schweinefleisch", "grillspieß", "schweinefleisch mariniert", "grillfleisch"],
 }

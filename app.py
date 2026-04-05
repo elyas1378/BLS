@@ -502,6 +502,35 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
         query_clean = re.sub(r'\b' + re.escape(noise) + r'\b', '', query_clean, flags=re.IGNORECASE)
     query_clean = re.sub(r'\s+', ' ', query_clean).strip()
 
+    # ── Tier 1: Free spell-check against BLS vocabulary ──
+    from modules.vocabulary import spell_check_query, get_vocab_set
+    corrected_query, corrections_log, any_unknown = spell_check_query(nq.cleaned)
+
+    # ── Tier 2: Haiku combined call (only if unknown tokens + expander) ──
+    haiku_search_terms = []
+    pre_retrieval_haiku_ran = False
+
+    if any_unknown and expander is not None:
+        unknown_tokens = [t for t in corrected_query.split()
+                         if t.lower() not in get_vocab_set()
+                         and len(t) >= 3 and not t.isdigit()]
+        # Gate: skip Haiku if concept expansion already covers all unknowns
+        unknowns_not_in_concepts = [t for t in unknown_tokens
+                                    if t.lower() not in CONCEPT_EXPANSION]
+        if unknowns_not_in_concepts:
+            haiku_result = expander.expand_with_spelling(
+                query,  # send original raw query — Haiku does its own correction
+                unknown_tokens=unknowns_not_in_concepts
+            )
+            haiku_corrected = haiku_result.get("corrected", corrected_query)
+            haiku_search_terms = haiku_result.get("search_terms", [])
+            pre_retrieval_haiku_ran = True
+            # Use Haiku's correction as the effective query
+            query_clean = haiku_corrected
+    elif corrections_log:
+        # Tier 1 made corrections — use the corrected query
+        query_clean = corrected_query
+
     # Split into main dish + modifiers at connectors
     _CONNECTORS = r'\s+(?:mit|und|aus|in|auf|ohne|an|nach|vom|zum|dazu|plus|à la)\s+'
     dish_parts = re.split(_CONNECTORS, query_clean, maxsplit=1, flags=re.IGNORECASE)
@@ -527,6 +556,16 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
                 r = text_ret.search(part, top_k=5)
                 merge(all_302, r.get("bls302", []), 0.5)
                 merge(all_40, r.get("bls40", []), 0.5)
+            except Exception:
+                pass
+
+    # ── Merge Haiku pre-retrieval search terms (if any) ──
+    if haiku_search_terms:
+        for term in haiku_search_terms:
+            try:
+                r = text_ret.search(term, top_k=5)
+                merge(all_302, r.get("bls302", []), 0.95)
+                merge(all_40, r.get("bls40", []), 0.95)
             except Exception:
                 pass
 
@@ -573,8 +612,8 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             except Exception:
                 pass
 
-    # ── Claude query expansion (only when retriever is struggling) ──
-    if expander is not None:
+    # ── Claude query expansion (only when retriever is struggling AND pre-retrieval didn't run) ──
+    if expander is not None and not pre_retrieval_haiku_ran:
         best_302 = max(((c.to_dict() if hasattr(c, "to_dict") else c)["score"]
                         for c in all_302.values()), default=0)
         best_40 = max(((c.to_dict() if hasattr(c, "to_dict") else c)["score"]
