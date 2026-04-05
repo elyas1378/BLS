@@ -743,6 +743,7 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             except Exception:
                 pass
 
+
     def sort_trim(d, k):
         items = sorted(d.values(), key=lambda x: (x.to_dict() if hasattr(x, "to_dict") else x)["score"], reverse=True)
         return items[:k]
