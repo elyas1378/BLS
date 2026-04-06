@@ -101,6 +101,9 @@ ONLY pick a specific preparation code if the description explicitly states it:
 - Prefer entries with "Standardrezeptur" for recipe-type foods
 - When fat% is mentioned (e.g., "3,5% Fett"), match the closest fat level
 
+## Closest substitute when no exact match exists:
+If no candidate is an exact match for the food described, pick the most nutritionally similar food from the list. For example, if the person ate 'Proteinriegel' and the candidates include 'Energieriegel' or 'Müsliriegel', pick those as the closest substitute. Always pick the best available option even if imperfect — a close substitute with confidence 0.40-0.60 is more useful than refusing to match.
+
 ## NOVA Classification
 Also classify this food according to the NOVA food classification system:
 - NOVA 1: Unprocessed or minimally processed foods (fresh fruits, vegetables, plain meat, eggs, milk, plain grains, water, coffee, tea)
@@ -121,7 +124,7 @@ Also classify this food according to the NOVA food classification system:
 }}
 ```
 
-Confidence: 0.90-1.0 = near-exact, 0.70-0.89 = strong, 0.50-0.69 = reasonable, <0.50 = uncertain."""
+Confidence: 0.90-1.0 = near-exact, 0.70-0.89 = strong, 0.50-0.69 = reasonable, 0.30-0.49 = rough substitute, <0.30 = rough nutritional proxy at best (flag in reasoning for manual review)."""
 
 
 # =====================================================================
