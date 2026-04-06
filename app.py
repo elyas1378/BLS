@@ -5,6 +5,7 @@ Streamlit Cloud deployment. Text matching + concept expansion + Claude API.
 Run locally:  streamlit run app.py
 """
 
+import json
 import os
 import sys
 import re
@@ -302,6 +303,9 @@ for key, default in [("cache_hits", 0), ("api_calls", 0), ("requery_food", None)
 
 from modules.flag_store import FlagStore
 _flag_store = FlagStore()
+
+from modules.persistent_cache import PersistentCache
+_pcache = PersistentCache()
 
 
 def get_expander(api_key):
@@ -914,11 +918,58 @@ if query:
     # ── Resolve matches ──
     result = None
     result_from_claude = False
+    pcache_status_302 = None  # "verified" or "unverified" from persistent cache
+    pcache_status_40 = None
 
-    if use_claude and _api_key:
+    # ── Check persistent cache BEFORE calling Sonnet ──
+    skip_cache = (st.session_state.requery_food == query)
+    is_flagged = _pcache.is_flagged(query)
+
+    if use_claude and _api_key and not skip_cache and not is_flagged:
+        pc302 = _pcache.lookup(query, "BLS 3.02")
+        pc40 = _pcache.lookup(query, "BLS 4.0")
+
+        if pc302 or pc40:
+            from modules.reranker_v2 import RerankerResult, RankedMatch
+            result = RerankerResult(food_description=query)
+            result_from_claude = True
+
+            if pc302:
+                pcache_status_302 = pc302["status"]
+                result.bls302_matches = [RankedMatch(
+                    rank=1, code=pc302["code"], name=pc302["name"],
+                    confidence=pc302["confidence"],
+                    reasoning=f"Persistent cache ({pc302['status']})",
+                )]
+                result.bls302_source = "cached"
+            if pc40:
+                pcache_status_40 = pc40["status"]
+                result.bls40_matches = [RankedMatch(
+                    rank=1, code=pc40["code"], name=pc40["name"],
+                    confidence=pc40["confidence"],
+                    reasoning=f"Persistent cache ({pc40['status']})",
+                )]
+                result.bls40_source = "cached"
+
+            # If only one version was cached, still need API for the other
+            if not pc302 or not pc40:
+                reranker = get_reranker(_api_key)
+                if reranker:
+                    api_result = reranker.rerank(query, candidates)
+                    if not pc302 and api_result.bls302_matches:
+                        result.bls302_matches = api_result.bls302_matches
+                        result.bls302_source = api_result.bls302_source
+                    if not pc40 and api_result.bls40_matches:
+                        result.bls40_matches = api_result.bls40_matches
+                        result.bls40_source = api_result.bls40_source
+                    if api_result.claude_nova is not None:
+                        result.claude_nova = api_result.claude_nova
+                        result.claude_nova_reasoning = api_result.claude_nova_reasoning
+
+    # ── Standard path: call Sonnet if no persistent cache hit ──
+    if result is None and use_claude and _api_key:
         reranker = get_reranker(_api_key)
         if reranker:
-            skip_cache = (st.session_state.requery_food == query)
             if skip_cache:
                 cache.delete(query)
                 st.session_state.requery_food = None
@@ -932,6 +983,20 @@ if query:
             st.session_state.cache_hits += reranker.session_cache_hits - old_hits
             st.session_state.api_calls += reranker.session_api_calls - old_calls
             result_from_claude = True
+
+            # Store results in persistent cache
+            m302 = result.bls302_matches or []
+            m40 = result.bls40_matches or []
+            if m302 and result.bls302_source == "api":
+                _pcache.store(query, "BLS 3.02", {
+                    "code": m302[0].code, "name": m302[0].name,
+                    "full_result_json": json.dumps([m.to_dict() for m in m302], ensure_ascii=False),
+                }, m302[0].confidence)
+            if m40 and result.bls40_source == "api":
+                _pcache.store(query, "BLS 4.0", {
+                    "code": m40[0].code, "name": m40[0].name,
+                    "full_result_json": json.dumps([m.to_dict() for m in m40], ensure_ascii=False),
+                }, m40[0].confidence)
 
     if result is None or (result and result.error):
         if result and result.error:
@@ -948,7 +1013,11 @@ if query:
     # ── Source text ──
     src302 = getattr(result, "bls302_source", "")
     src40 = getattr(result, "bls40_source", "")
-    if src302 == "verified":
+    if pcache_status_302 == "verified":
+        source_text = "Verified (persistent cache)"
+    elif pcache_status_302 == "unverified":
+        source_text = "Unverified cache — please review"
+    elif src302 == "verified":
         source_text = "Verified lookup — no API cost"
     elif src302 == "cached":
         source_text = "Served from cache — no API cost"
@@ -969,22 +1038,67 @@ if query:
 
     with st.container():
         st.markdown('<div class="action-row">', unsafe_allow_html=True)
-        act_cols = st.columns([5, 1, 1])
+
+        # Show verify/reject buttons for unverified persistent cache hits
+        is_unverified = pcache_status_302 == "unverified" or pcache_status_40 == "unverified"
+
+        if is_unverified:
+            act_cols = st.columns([4, 1, 1, 1, 1])
+        else:
+            act_cols = st.columns([5, 1, 1])
+
         with act_cols[0]:
-            st.markdown(f'<span style="font-size:12px; color:#86868b;">{source_text}</span>',
-                        unsafe_allow_html=True)
-        with act_cols[1]:
-            if has_cached:
+            if pcache_status_302 == "verified":
+                st.markdown('<span style="font-size:12px; color:#34c759;">✓ Verified</span>',
+                            unsafe_allow_html=True)
+            elif is_unverified:
+                st.markdown('<span style="font-size:12px; color:#f5a623;">⚠ Unverified — please review</span>',
+                            unsafe_allow_html=True)
+            else:
+                st.markdown(f'<span style="font-size:12px; color:#86868b;">{source_text}</span>',
+                            unsafe_allow_html=True)
+
+        col_idx = 1
+        if is_unverified:
+            with act_cols[col_idx]:
+                if st.button("Confirm", key="confirm_btn", type="secondary"):
+                    if pcache_status_302 == "unverified":
+                        _pcache.confirm(query, "BLS 3.02")
+                    if pcache_status_40 == "unverified":
+                        _pcache.confirm(query, "BLS 4.0")
+                    st.rerun()
+            col_idx += 1
+            with act_cols[col_idx]:
+                if st.button("Reject", key="reject_btn", type="secondary"):
+                    if pcache_status_302 == "unverified":
+                        _pcache.reject(query, "BLS 3.02")
+                    if pcache_status_40 == "unverified":
+                        _pcache.reject(query, "BLS 4.0")
+                    st.session_state.requery_food = query
+                    st.rerun()
+            col_idx += 1
+
+        with act_cols[col_idx]:
+            if has_cached and not is_unverified:
                 if st.button("Re-query", key="requery_btn", type="secondary"):
                     st.session_state.requery_food = query
                     st.rerun()
-        with act_cols[2]:
-            if already_flagged:
-                st.markdown('<span style="font-size:12px; color:#34c759;">Flagged ✓</span>',
-                            unsafe_allow_html=True)
-            else:
+
+        last_col = col_idx + 1 if not is_unverified else col_idx + 1
+        if last_col < len(act_cols):
+            with act_cols[last_col]:
+                if already_flagged:
+                    st.markdown('<span style="font-size:12px; color:#34c759;">Flagged ✓</span>',
+                                unsafe_allow_html=True)
+                else:
+                    if st.button("Flag", key="flag_btn", type="secondary"):
+                        st.session_state["show_flag_form"] = True
+        else:
+            # Flag button didn't fit — show below
+            if not already_flagged:
                 if st.button("Flag", key="flag_btn", type="secondary"):
                     st.session_state["show_flag_form"] = True
+
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Flag form (appears after clicking Flag) ──
