@@ -64,7 +64,7 @@ class QueryExpander:
         if not key:
             raise ValueError("Set ANTHROPIC_API_KEY or pass api_key parameter.")
 
-        self.client = anthropic.Anthropic(api_key=key, timeout=10.0)
+        self.client = anthropic.Anthropic(api_key=key, timeout=30.0)
         self._cache: dict[str, list[str]] = {}
         self._lock = Lock()
         self._load_cache()
@@ -114,7 +114,8 @@ class QueryExpander:
 
             return terms
 
-        except Exception:
+        except Exception as e:
+            print(f"  ⚠ Haiku expansion failed for '{food_description[:40]}': {type(e).__name__}: {e}")
             return []
 
     # ── V2: Combined spelling + expansion ──
@@ -226,7 +227,8 @@ class QueryExpander:
 
             return result
 
-        except Exception:
+        except Exception as e:
+            print(f"  ⚠ Haiku expansion (v2) failed for '{food_description[:40]}': {type(e).__name__}: {e}")
             return fallback
 
     @property
