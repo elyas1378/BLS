@@ -30,8 +30,15 @@ Rules:
 - For English food names, include the German translation
 - For composite foods, include both the composite term AND individual components
 - For drinks disguised as food names, clarify (e.g. heiße Schokolade → Kakaogetränk, Schokolade heißes Getränk, Trinkschokolade)
+- If the food is a modern, specialty, or foreign item that likely does not exist in the BLS, also suggest the closest traditional German food equivalent (e.g. Proteinriegel → Müsliriegel, Energieriegel; Taco Schalen → Maistortilla, Maisfladen; Flohsamenschalen → Leinsamen, Weizenkleie)
 - Think about what terms a German nutritional database would actually use
-- Return ONLY the search terms, no explanations, no numbering"""
+- Return ONLY the search terms, no explanations, no numbering
+
+BLS-specific terminology:
+- 'Trüffel' in BLS means the mushroom (Tuber), NOT chocolate truffles. For chocolate truffles use: Praline, Konfekt, Schokolade gefüllt
+- For hot/warm drinks, always include 'Getränk' or 'heißes Getränk'. 'Schokolade' alone returns solid chocolate bars.
+- 'Mousse' is poorly represented in BLS. Use Creme, Pudding, or Dessert instead.
+- Brand names: Buko = Frischkäse, Manner = Haselnuss-Waffelschnitten, Riesen = Karamellbonbon. When you recognize a brand, provide the generic food category."""
 
 
 class QueryExpander:
@@ -105,7 +112,12 @@ class QueryExpander:
         "in the BLS (Bundeslebensmittelschlüssel) food database.\n\n"
         "Include: the corrected name, common German synonyms, "
         "brand-to-generic-product mappings, English-to-German translations, "
-        "and for composite foods also list the individual components.\n\n"
+        "and for composite foods also list the individual components.\n"
+        "If the food likely does not exist in BLS, suggest the closest "
+        "traditional German food equivalent.\n\n"
+        "BLS terminology: 'Trüffel' = mushroom (not chocolate); "
+        "for hot drinks include 'Getränk'; 'Mousse' → use 'Creme/Pudding'; "
+        "Buko = Frischkäse; Manner = Haselnuss-Waffelschnitten.\n\n"
         'Respond ONLY with JSON, no markdown, no explanation:\n'
         '{"corrected": "corrected food description", '
         '"search_terms": ["term1", "term2", ...]}'
