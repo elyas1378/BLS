@@ -493,12 +493,29 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             if code not in target or score > (target[code].to_dict() if hasattr(target[code], "to_dict") else target[code])["score"]:
                 target[code] = c
 
-    # Strip noise words that add no search value
-    _NOISE = {"selbstgemachte", "selbstgemachter", "selbstgemachtes", "selbstgemacht",
-              "hausgemacht", "hausgemachte", "hausgemachter", "homemade",
-              "frische", "frischer", "frisches"}
+    # Strip noise words/phrases that add no search value
+    # Multi-word phrases first (order matters)
+    _NOISE_PHRASES = [
+        "aus dem glas", "aus der dose", "aus der packung", "aus der tüte",
+        "aus der flasche", "vom bäcker", "vom metzger", "vom markt",
+        "ohne weitere angaben",
+    ]
+    _NOISE_WORDS = {
+        "selbstgemachte", "selbstgemachter", "selbstgemachtes", "selbstgemacht",
+        "hausgemacht", "hausgemachte", "hausgemachter", "homemade",
+        "frische", "frischer", "frisches",
+        "gekauft", "fertig", "fertige", "fertiger", "fertiges",
+        "aufgebacken", "aufgewärmt", "zubereitet",
+        "tiefgekühlt", "tiefgefroren",
+    }
     query_clean = query
-    for noise in _NOISE:
+    # Strip parentheticals first (e.g. "(ohne weitere Angaben)", "(aufgebacken)")
+    query_clean = re.sub(r'\([^)]*\)', '', query_clean)
+    # Strip multi-word phrases
+    for phrase in _NOISE_PHRASES:
+        query_clean = re.sub(re.escape(phrase), '', query_clean, flags=re.IGNORECASE)
+    # Strip single words
+    for noise in _NOISE_WORDS:
         query_clean = re.sub(r'\b' + re.escape(noise) + r'\b', '', query_clean, flags=re.IGNORECASE)
     query_clean = re.sub(r'\s+', ' ', query_clean).strip()
 
@@ -548,12 +565,18 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
         merge(all_302, result_full.get("bls302", []))
         merge(all_40, result_full.get("bls40", []))
 
-    # Search modifier phrases at reduced weight
+    # Search modifier phrases at reduced weight + track codes for slot reservation
+    modifier_302_codes = set()
+    modifier_40_codes = set()
     if modifier_phrases:
         mod_parts = re.split(r'\s*[,;]\s*|\s+und\s+', modifier_phrases)
         for part in [p.strip() for p in mod_parts[:4] if len(p.strip()) >= 3]:
             try:
                 r = text_ret.search(part, top_k=5)
+                for c in r.get("bls302", []):
+                    modifier_302_codes.add((c.to_dict() if hasattr(c, "to_dict") else c)["code"])
+                for c in r.get("bls40", []):
+                    modifier_40_codes.add((c.to_dict() if hasattr(c, "to_dict") else c)["code"])
                 merge(all_302, r.get("bls302", []), 0.5)
                 merge(all_40, r.get("bls40", []), 0.5)
             except Exception:
@@ -744,11 +767,45 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
                 pass
 
 
-    def sort_trim(d, k):
-        items = sorted(d.values(), key=lambda x: (x.to_dict() if hasattr(x, "to_dict") else x)["score"], reverse=True)
-        return items[:k]
+    # ── Compound salat suppression ──
+    _salat_compounds = [t for t in re.findall(r'\w+', query_clean.lower())
+                        if t.endswith("salat") and len(t) > 5]
+    if _salat_compounds:
+        _LEAVES = {"eisbergsalat", "kopfsalat", "feldsalat", "endiviensalat",
+                   "lollo", "rucola", "radicchio", "blattsalat"}
+        for pool in (all_302, all_40):
+            for cand in pool.values():
+                nl = (cand.name_de if hasattr(cand, "name_de") else
+                      cand.get("name_de", "")).lower()
+                if any(leaf in nl for leaf in _LEAVES):
+                    if hasattr(cand, "score"):
+                        cand.score *= 0.2
+                    else:
+                        cand["score"] *= 0.2
 
-    return {"query": nq, "bls302": sort_trim(all_302, top_k), "bls40": sort_trim(all_40, top_k)}
+    # ── Sort, trim, and return ──
+    def sort_trim(d, k, mod_codes=None):
+        items = sorted(d.values(),
+                       key=lambda x: (x.to_dict() if hasattr(x, "to_dict") else x)["score"],
+                       reverse=True)
+        if not mod_codes:
+            return items[:k]
+        main_items, mod_items = [], []
+        for item in items:
+            code = (item.to_dict() if hasattr(item, "to_dict") else item).get("code", "")
+            if code in mod_codes:
+                mod_items.append(item)
+            else:
+                main_items.append(item)
+        reserved = min(5, len(mod_items))
+        combined = main_items[:k - reserved] + mod_items[:reserved]
+        combined.sort(key=lambda x: (x.to_dict() if hasattr(x, "to_dict") else x)["score"],
+                      reverse=True)
+        return combined[:k]
+
+    return {"query": nq,
+            "bls302": sort_trim(all_302, top_k, modifier_302_codes),
+            "bls40": sort_trim(all_40, top_k, modifier_40_codes)}
 
 
 # ═══════════════════════════════════════════════════════════
