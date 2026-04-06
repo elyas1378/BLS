@@ -38,7 +38,22 @@ BLS-specific terminology:
 - 'Trüffel' in BLS means the mushroom (Tuber), NOT chocolate truffles. For chocolate truffles use: Praline, Konfekt, Schokolade gefüllt
 - For hot/warm drinks, always include 'Getränk' or 'heißes Getränk'. 'Schokolade' alone returns solid chocolate bars.
 - 'Mousse' is poorly represented in BLS. Use Creme, Pudding, or Dessert instead.
-- Brand names: Buko = Frischkäse, Manner = Haselnuss-Waffelschnitten, Riesen = Karamellbonbon. When you recognize a brand, provide the generic food category."""
+- Brand names: Buko = Frischkäse, Manner = Haselnuss-Waffelschnitten, Riesen = Karamellbonbon. When you recognize a brand, provide the generic food category.
+
+BLS naming patterns — your search terms MUST match these:
+The BLS database does NOT use compound words the way German speakers naturally write them. You MUST decompose compounds into BLS-style phrases:
+- "Vanillejoghurt" → search "Joghurt mit Vanille", "Joghurt Vanillegeschmack"
+- "Fruchtjoghurt" → search "Joghurt mit Fruchtzubereitung", "Joghurt Frucht"
+- "Hühnersuppe" → search "Suppe mit Hühnerfleisch", "Nudelsuppe Huhn"
+- "Gemüserisotto" → search "Gemüsereis", "Reis mit Gemüse" (BLS uses "Reis" not "Risotto")
+- "Käsestange" → search "Käsegebäck", "Gebäck mit Käse", "Käsegebäck Blätterteig"
+- "Nusszopf" → search "Nusskuchen", "Hefeteiggebäck mit Nüssen"
+General rule: split [Modifier][FoodType] compounds into "FoodType mit Modifier" AND search for BLS synonyms of FoodType:
+- Riegel → Energieriegel, Müsliriegel
+- Risotto → Reis
+- Zopf/Schnecke/Stange (baked goods) → Kuchen, Gebäck, Plundergebäck, Hefeteig
+- Suppe → also try Eintopf, Brühe
+- Curry → Curryreis, Currysoße"""
 
 
 class QueryExpander:
@@ -118,6 +133,17 @@ class QueryExpander:
         "BLS terminology: 'Trüffel' = mushroom (not chocolate); "
         "for hot drinks include 'Getränk'; 'Mousse' → use 'Creme/Pudding'; "
         "Buko = Frischkäse; Manner = Haselnuss-Waffelschnitten.\n\n"
+        "BLS naming patterns — decompose compounds into BLS-style phrases:\n"
+        "- 'Vanillejoghurt' → 'Joghurt mit Vanille', 'Joghurt Vanillegeschmack'\n"
+        "- 'Fruchtjoghurt' → 'Joghurt mit Fruchtzubereitung', 'Joghurt Frucht'\n"
+        "- 'Hühnersuppe' → 'Suppe mit Hühnerfleisch', 'Nudelsuppe Huhn'\n"
+        "- 'Gemüserisotto' → 'Gemüsereis', 'Reis mit Gemüse' (BLS uses 'Reis' not 'Risotto')\n"
+        "- 'Käsestange' → 'Käsegebäck', 'Gebäck mit Käse'\n"
+        "- 'Nusszopf' → 'Nusskuchen', 'Hefeteiggebäck mit Nüssen'\n"
+        "Split [Modifier][FoodType] → 'FoodType mit Modifier' + BLS synonyms:\n"
+        "Riegel → Energieriegel, Müsliriegel; Risotto → Reis; "
+        "Zopf/Schnecke/Stange → Kuchen, Gebäck, Plundergebäck; "
+        "Suppe → Eintopf, Brühe; Curry → Curryreis, Currysoße.\n\n"
         'Respond ONLY with JSON, no markdown, no explanation:\n'
         '{"corrected": "corrected food description", '
         '"search_terms": ["term1", "term2", ...]}'
