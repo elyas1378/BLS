@@ -712,6 +712,7 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
                 pass
 
     # ── Claude query expansion (only when retriever is struggling AND pre-retrieval didn't run) ──
+    _old_expansion_ran = False
     if expander is not None and not pre_retrieval_haiku_ran:
         best_302 = max(((c.to_dict() if hasattr(c, "to_dict") else c)["score"]
                         for c in all_302.values()), default=0)
@@ -719,6 +720,7 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
                        for c in all_40.values()), default=0)
         if best_302 < 1.5 or best_40 < 1.5:
             expansion_terms = expander.expand(query)
+            _old_expansion_ran = True
             for term in expansion_terms:
                 try:
                     r = text_ret.search(term, top_k=5)
@@ -728,6 +730,60 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
                         merge(all_40, r.get("bls40", []), 0.95)
                 except Exception:
                     pass
+
+    # ── Late-stage Haiku rescue ──
+    if expander is not None and not haiku_search_terms and not _old_expansion_ran:
+        _LSTOP = {"mit", "und", "aus", "von", "für", "ohne", "in", "an", "auf",
+                  "der", "die", "das", "dem", "den", "ein", "eine", "einer",
+                  "zu", "zum", "zur", "im", "am", "vom"}
+        q_content = [t for t in re.findall(r'\w+', query_clean.lower())
+                     if len(t) >= 3 and t not in _LSTOP]
+
+        _need_rescue = False
+        if len(q_content) >= 2:
+            # Multi-token: check if any top-5 candidate contains ALL content tokens
+            for pool in (all_302, all_40):
+                top5 = sorted(pool.values(),
+                              key=lambda x: (x.to_dict() if hasattr(x, "to_dict") else x)["score"],
+                              reverse=True)[:5]
+                for cand in top5:
+                    name_l = (cand.name_de if hasattr(cand, "name_de") else
+                              cand.get("name_de", "")).lower()
+                    if all(t in name_l for t in q_content):
+                        _need_rescue = False
+                        break
+                else:
+                    _need_rescue = True
+                    continue
+                break
+
+        elif len(q_content) == 1 and len(q_content[0]) >= 8:
+            # Single long compound: check if top-1 candidate name contains the word
+            _need_rescue = True
+            for pool in (all_302, all_40):
+                top1 = sorted(pool.values(),
+                              key=lambda x: (x.to_dict() if hasattr(x, "to_dict") else x)["score"],
+                              reverse=True)[:1]
+                if top1:
+                    name_l = (top1[0].name_de if hasattr(top1[0], "name_de") else
+                              top1[0].get("name_de", "")).lower()
+                    if q_content[0] in name_l:
+                        _need_rescue = False
+                        break
+
+        if _need_rescue:
+            try:
+                late_terms = expander.expand(query)
+                if late_terms:
+                    for term in late_terms:
+                        try:
+                            r = text_ret.search(term, top_k=10)
+                            merge(all_302, r.get("bls302", []), 0.95)
+                            merge(all_40, r.get("bls40", []), 0.95)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
     # ── Cross-version bootstrapping ──
     _best_302 = max(((c.to_dict() if hasattr(c, "to_dict") else c)["score"]
