@@ -2,3 +2,5 @@ streamlit
 pandas
 pyarrow
 anthropic
+gspread
+google-auth

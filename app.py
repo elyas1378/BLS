@@ -300,35 +300,8 @@ for key, default in [("cache_hits", 0), ("api_calls", 0), ("requery_food", None)
 #  Helpers
 # ═══════════════════════════════════════════════════════════
 
-FLAG_FILE = Path(__file__).resolve().parent / "cache" / "flagged_results.json"
-
-
-def save_flag(entry: dict):
-    """Append a flagged result to the JSON log."""
-    import json
-    FLAG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    flags = []
-    if FLAG_FILE.exists():
-        try:
-            with open(FLAG_FILE, "r", encoding="utf-8") as f:
-                flags = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            flags = []
-    flags.append(entry)
-    with open(FLAG_FILE, "w", encoding="utf-8") as f:
-        json.dump(flags, f, ensure_ascii=False, indent=1)
-
-
-def load_flags() -> list[dict]:
-    """Load all flagged results."""
-    import json
-    if FLAG_FILE.exists():
-        try:
-            with open(FLAG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return []
-    return []
+from modules.flag_store import FlagStore
+_flag_store = FlagStore()
 
 
 def get_expander(api_key):
@@ -1011,27 +984,52 @@ if query:
                             unsafe_allow_html=True)
             else:
                 if st.button("Flag", key="flag_btn", type="secondary"):
-                    from datetime import datetime
-                    m302 = result.bls302_matches or []
-                    m40 = result.bls40_matches or []
-                    nova_val = None
-                    if m302:
-                        nova_val, _ = resolve_nova(m302[0].code, "302", query, nq.brand,
-                                                  claude_nova, result_from_claude)
-                    save_flag({
-                        "timestamp": datetime.now().isoformat(),
-                        "food_description": query,
-                        "normalized_name": nq.cleaned,
-                        "bls302_code": m302[0].code if m302 else None,
-                        "bls302_name": m302[0].name if m302 else None,
-                        "bls40_code": m40[0].code if m40 else None,
-                        "bls40_name": m40[0].name if m40 else None,
-                        "nova_score": nova_val,
-                        "source": source_text,
-                    })
-                    st.session_state.flagged_this_session.add(query)
-                    st.rerun()
+                    st.session_state["show_flag_form"] = True
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Flag form (appears after clicking Flag) ──
+    if not already_flagged and st.session_state.get("show_flag_form"):
+        with st.container():
+            flag_note = st.text_input("What's wrong? (optional)", key="flag_note",
+                                      placeholder="e.g. wrong code, wrong NOVA, ...")
+            if st.button("Submit flag", key="submit_flag_btn", type="primary"):
+                from datetime import datetime
+                m302 = result.bls302_matches or []
+                m40 = result.bls40_matches or []
+                nova_val = None
+                if m302:
+                    nova_val, _ = resolve_nova(m302[0].code, "302", query, nq.brand,
+                                              claude_nova, result_from_claude)
+                flag_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "food": query,
+                    "normalized": nq.cleaned,
+                    "bls302_code": m302[0].code if m302 else "",
+                    "bls302_name": m302[0].name if m302 else "",
+                    "bls40_code": m40[0].code if m40 else "",
+                    "bls40_name": m40[0].name if m40 else "",
+                    "nova": nova_val,
+                    "source": source_text,
+                    "note": flag_note,
+                }
+                ok = _flag_store.append_flag(flag_data)
+                if not ok:
+                    st.warning("Could not write to Google Sheets — saved locally.")
+                    FLAG_FILE = Path(__file__).resolve().parent / "cache" / "flagged_results.json"
+                    FLAG_FILE.parent.mkdir(parents=True, exist_ok=True)
+                    local_flags = []
+                    if FLAG_FILE.exists():
+                        try:
+                            with open(FLAG_FILE, "r", encoding="utf-8") as f:
+                                local_flags = json.load(f)
+                        except (json.JSONDecodeError, IOError):
+                            local_flags = []
+                    local_flags.append(flag_data)
+                    with open(FLAG_FILE, "w", encoding="utf-8") as f:
+                        json.dump(local_flags, f, ensure_ascii=False, indent=1)
+                st.session_state.flagged_this_session.add(query)
+                st.session_state["show_flag_form"] = False
+                st.rerun()
 
     # ── More matches (2nd and 3rd choices) ──
     m302 = result.bls302_matches or []
@@ -1083,7 +1081,7 @@ if query:
 if st.query_params.get("admin") == "true":
     st.markdown("---")
     st.markdown("#### Flagged Results")
-    flags = load_flags()
+    flags = _flag_store.get_all_flags()
     if not flags:
         st.info("No flagged results yet.")
     else:
