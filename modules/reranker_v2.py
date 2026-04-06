@@ -88,21 +88,50 @@ When the food description does NOT explicitly mention a preparation method
 - "Lachs" → pick T410000 (Lachs generic), NOT T410082 (Lachs gebraten)
 - "Apfel" → pick F110100 (Apfel roh), NOT F110122 (Apfel gegart)
 - "Käse" → pick M400000 (Schnittkäse generic), NOT a specific fat variant
-- "Champignons" → pick the generic or gedünstet entry, NOT roh
 ONLY pick a specific preparation code if the description explicitly states it:
 - "Lachs, gebraten" → T410082 is correct (gebraten explicitly stated)
 - "Reis gekocht" → C352032 is correct (gekocht explicitly stated)
 
+## EVERY WORD MATTERS — modifier awareness:
+Every word in the input carries meaning. Pay close attention to:
+- Negations: "sin" (without), "ohne" (without) → do NOT pick the opposite (e.g. "sin carne" ≠ "con carne")
+- Flavor/type modifiers: "Vanille", "Schoko", "Reis" → the match MUST reflect this modifier
+- "mit X" constructions: the match should reflect BOTH the base food AND X, not just the base food alone
+- Never add attributes NOT present in the input. "Toast" = generic toast, NOT gluten-free toast.
+
+## Brand names and colloquial German food names:
+Interpret these as the FOOD PRODUCT they refer to, not the literal word meaning:
+- "Osterhase" = chocolate Easter bunny (Schokolade/Schokoladenfigur), NOT Hase (rabbit meat)
+- "Riesen" = caramel candy brand (Karamellbonbon), NOT Riesengarnelen (shrimp)
+- "Lindt Kugel" = chocolate praline (Praline/Konfekt), NOT Trüffel (mushroom)
+- "Kinder", "Duplo", "Hanuta", "Milka", "Snickers" = chocolate/candy products
+
 ## Other matching priorities:
 - Composite dishes → X (vegetable-based) or Y (meat/fish-based) recipes
-- Brand names → generic BLS category
 - Fat% should match when specified
 - Avoid top-level category headers (codes like M000000, G000000)
 - Prefer entries with "Standardrezeptur" for recipe-type foods
 - When fat% is mentioned (e.g., "3,5% Fett"), match the closest fat level
 
 ## Closest substitute when no exact match exists:
-If no candidate is an exact match for the food described, pick the most nutritionally similar food from the list. For example, if the person ate 'Proteinriegel' and the candidates include 'Energieriegel' or 'Müsliriegel', pick those as the closest substitute. Always pick the best available option even if imperfect — a close substitute with confidence 0.40-0.60 is more useful than refusing to match.
+If no candidate is an exact match, pick the most nutritionally similar food from the list. A close substitute with confidence 0.40-0.60 is more useful than refusing to match.
+
+## Few-shot examples of correct reasoning:
+
+Input: "Chili sin carne"
+Correct: Pick vegetarian chili / bean stew — "sin" means WITHOUT meat. Do NOT pick "Chili con carne".
+
+Input: "Osterhase"
+Correct: Pick Vollmilchschokolade / Schokoladenfigur — this is a chocolate Easter bunny, NOT rabbit meat.
+
+Input: "Reiswaffel"
+Correct: Pick Reiswaffel / Reiswaffel entry — a rice cake/wafer, NOT Schokowaffel.
+
+Input: "Vanillejoghurt"
+Correct: Pick Joghurt mit Vanille / Vanillejoghurt — the match MUST contain vanilla, NOT plain Joghurt.
+
+Input: "Brötchen mit Lachs"
+Correct: If available, pick a composite entry (Brötchen mit Lachs/Räucherlachs). If not, prefer Lachs over plain Brötchen — the participant is describing what they ate ON the bread, which is nutritionally more significant.
 
 ## NOVA Classification
 Also classify this food according to the NOVA food classification system:
