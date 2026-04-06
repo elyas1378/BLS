@@ -4,3 +4,4 @@ pyarrow
 anthropic
 gspread
 google-auth
+google-genai

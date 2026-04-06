@@ -231,6 +231,60 @@ class QueryExpander:
             print(f"  ⚠ Haiku expansion (v2) failed for '{food_description[:40]}': {type(e).__name__}: {e}")
             return fallback
 
+    # ── Gemini Flash expansion ──
+
+    def expand_gemini(self, food_description: str) -> list[str]:
+        """Generate search terms using Gemini Flash.
+
+        Runs in parallel with Haiku — provides complementary terms.
+        Returns list of search term strings, or empty list on failure.
+        """
+        cache_key = "gemini:" + food_description.strip().lower()
+
+        # Check cache
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        # Get API key
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if not gemini_key:
+            try:
+                import streamlit as st
+                gemini_key = st.secrets.get("GEMINI_API_KEY")
+            except Exception:
+                pass
+        if not gemini_key:
+            return []
+
+        try:
+            from google import genai
+
+            client = genai.Client(api_key=gemini_key)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=food_description,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    temperature=0.0,
+                    max_output_tokens=150,
+                ),
+            )
+
+            text = response.text.strip()
+            terms = [line.strip().lstrip("0123456789.-) ") for line in text.split("\n")]
+            terms = [t for t in terms if t and len(t) >= 2]
+
+            # Cache the result
+            with self._lock:
+                self._cache[cache_key] = terms
+                self._save_cache()
+
+            return terms
+
+        except Exception as e:
+            print(f"  ⚠ Gemini expansion failed for '{food_description[:40]}': {type(e).__name__}: {e}")
+            return []
+
     @property
     def cache_size(self) -> int:
         return len(self._cache)

@@ -559,9 +559,24 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             except Exception:
                 pass
 
-    # ── Merge Haiku pre-retrieval search terms (if any) ──
-    if haiku_search_terms:
-        for term in haiku_search_terms:
+    # ── Merge Haiku + Gemini pre-retrieval search terms ──
+    gemini_search_terms = []
+    if expander is not None:
+        gemini_search_terms = expander.expand_gemini(query)
+
+    # Merge and deduplicate
+    haiku_set = set(t.lower().strip() for t in haiku_search_terms)
+    gemini_set = set(t.lower().strip() for t in gemini_search_terms)
+    merged_terms_set = haiku_set | gemini_set
+    # Build final list preserving original casing — Haiku terms first, then Gemini-only
+    merged_terms = list(haiku_search_terms)
+    for t in gemini_search_terms:
+        if t.lower().strip() not in haiku_set:
+            merged_terms.append(t)
+
+    if merged_terms:
+        print(f"  Haiku: {len(haiku_search_terms)} terms, Gemini: {len(gemini_search_terms)} terms, Merged: {len(merged_terms)} unique terms")
+        for term in merged_terms:
             try:
                 r = text_ret.search(term, top_k=5)
                 merge(all_302, r.get("bls302", []), 0.95)
