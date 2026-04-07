@@ -161,7 +161,7 @@ Confidence: 0.90-1.0 = near-exact, 0.70-0.89 = strong, 0.50-0.69 = reasonable, 0
 # =====================================================================
 
 class RerankerV2:
-    def __init__(self, api_key: str | None = None, cache=None):
+    def __init__(self, api_key: str | None = None):
         import anthropic
 
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
@@ -170,8 +170,6 @@ class RerankerV2:
 
         self.client = anthropic.Anthropic(api_key=key)
         self.model = CLAUDE_MODEL
-        self.cache = cache  # ClaudeCache instance (or None to disable)
-        self.session_cache_hits = 0
         self.session_api_calls = 0
 
         # Build system prompt
@@ -292,17 +290,6 @@ class RerankerV2:
             ))
 
         return results[:3], nova_score, nova_reasoning
-
-    @staticmethod
-    def _matches_to_dicts(matches: list[RankedMatch]) -> list[dict]:
-        return [m.to_dict() for m in matches]
-
-    @staticmethod
-    def _dicts_to_matches(dicts: list[dict]) -> list[RankedMatch]:
-        return [RankedMatch(
-            rank=d["rank"], code=d["code"], name=d["name"],
-            confidence=d["confidence"], reasoning=d["reasoning"],
-        ) for d in dicts]
 
     def _build_combined_prompt(self, food_description: str,
                                candidates_302: list[dict],
@@ -436,10 +423,10 @@ class RerankerV2:
         }
 
     def rerank(self, food_description: str, retrieval_results: dict,
-               skip_cache: bool = False) -> RerankerResult:
+               skip_verified: bool = False) -> RerankerResult:
         """
         Re-rank candidates for BOTH BLS versions.
-        Uses verified lookup first (free), then cache, then Claude.
+        Uses verified lookup first (free), then Claude API.
         Combined single API call when both versions need re-ranking.
         """
         result = RerankerResult(food_description=food_description)
@@ -448,9 +435,8 @@ class RerankerV2:
 
         try:
             # ── TIER 0: Verified lookup (skip Claude entirely) ──
-            # skip_cache also skips verified maps (used by Re-query)
-            v302 = None if skip_cache else VERIFIED_MAP_302.get(original_lower)
-            v40 = None if skip_cache else VERIFIED_MAP_40.get(original_lower)
+            v302 = None if skip_verified else VERIFIED_MAP_302.get(original_lower)
+            v40 = None if skip_verified else VERIFIED_MAP_40.get(original_lower)
 
             if v302:
                 name = self._names_302.get(v302, v302)
@@ -472,7 +458,7 @@ class RerankerV2:
             if v302 and v40:
                 return result
 
-            # ── Check cache for both versions ──
+            # ── Prepare candidates for API call ──
             need_api_302 = not v302 and bool(retrieval_results.get("bls302"))
             need_api_40 = not v40 and bool(retrieval_results.get("bls40"))
 
@@ -480,30 +466,12 @@ class RerankerV2:
             cands_40 = []
 
             if need_api_302:
-                cached = None
-                if self.cache and not skip_cache:
-                    cached = self.cache.get(food_description, "BLS 3.02")
-                if cached is not None:
-                    result.bls302_matches = self._dicts_to_matches(cached)
-                    result.bls302_source = "cached"
-                    self.session_cache_hits += 1
-                    need_api_302 = False
-                else:
-                    cands_302 = [c.to_dict() if hasattr(c, "to_dict") else c
-                                 for c in retrieval_results["bls302"]]
+                cands_302 = [c.to_dict() if hasattr(c, "to_dict") else c
+                             for c in retrieval_results["bls302"]]
 
             if need_api_40:
-                cached = None
-                if self.cache and not skip_cache:
-                    cached = self.cache.get(food_description, "BLS 4.0")
-                if cached is not None:
-                    result.bls40_matches = self._dicts_to_matches(cached)
-                    result.bls40_source = "cached"
-                    self.session_cache_hits += 1
-                    need_api_40 = False
-                else:
-                    cands_40 = [c.to_dict() if hasattr(c, "to_dict") else c
-                                for c in retrieval_results["bls40"]]
+                cands_40 = [c.to_dict() if hasattr(c, "to_dict") else c
+                            for c in retrieval_results["bls40"]]
 
             # ── API call ──
             if need_api_302 and need_api_40:
@@ -542,14 +510,6 @@ class RerankerV2:
                             reasoning="Fallback: Claude returned no valid codes",
                         ))
 
-                # Save to cache
-                if self.cache and result.bls302_matches:
-                    self.cache.put(food_description, "BLS 3.02",
-                                   self._matches_to_dicts(result.bls302_matches))
-                if self.cache and result.bls40_matches:
-                    self.cache.put(food_description, "BLS 4.0",
-                                   self._matches_to_dicts(result.bls40_matches))
-
             elif need_api_302:
                 # Only 3.02 needs API (4.0 was cached/verified)
                 cand_codes_302 = {c["code"] for c in cands_302}
@@ -573,10 +533,6 @@ class RerankerV2:
                             confidence=c["score"] * 0.7,
                             reasoning="Fallback: Claude returned no valid codes",
                         ))
-                if self.cache and result.bls302_matches:
-                    self.cache.put(food_description, "BLS 3.02",
-                                   self._matches_to_dicts(result.bls302_matches))
-
             elif need_api_40:
                 # Only 4.0 needs API (3.02 was cached/verified)
                 cand_codes_40 = {c["code"] for c in cands_40}
@@ -600,10 +556,6 @@ class RerankerV2:
                             confidence=c["score"] * 0.7,
                             reasoning="Fallback: Claude returned no valid codes",
                         ))
-                if self.cache and result.bls40_matches:
-                    self.cache.put(food_description, "BLS 4.0",
-                                   self._matches_to_dicts(result.bls40_matches))
-
         except Exception as e:
             result.error = str(e)
 

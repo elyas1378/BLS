@@ -678,10 +678,12 @@ def normalize(text: str) -> NormalizedQuery:
             working_lower_check = working.lower()
 
     # 1. Extract fat percentage BEFORE lowercasing (preserve original)
-    #    But skip if this is an alcoholic/beverage context (% = alcohol, not fat)
+    #    Skip if: alcoholic/beverage context (% = ABV) or value > 45% (not fat)
     fat_match = FAT_PATTERN.search(working)
     if fat_match and not _is_beverage_context(working):
-        result.fat_percent = fat_match.group(1).replace(",", ".")
+        fat_val = float(fat_match.group(1).replace(",", "."))
+        if fat_val <= 45:
+            result.fat_percent = fat_match.group(1).replace(",", ".")
 
     # 2. Lowercase
     working = working.lower().strip()

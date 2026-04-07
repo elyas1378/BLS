@@ -18,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from modules.food_group_classifier import classify
 from modules.nova_classifier import classify_nova, needs_claude_nova
-from modules.claude_cache import ClaudeCache
 
 
 def resolve_nova(code, bls_version, food_desc, brand, claude_nova=None, used_claude=False):
@@ -283,15 +282,11 @@ st.markdown("""
 # ═══════════════════════════════════════════════════════════
 
 @st.cache_resource
-def get_cache():
-    return ClaudeCache()
-
-@st.cache_resource
 def load_text_retriever():
     from modules.text_retriever import TextMatchRetriever
     return TextMatchRetriever(verbose=False)
 
-for key, default in [("cache_hits", 0), ("api_calls", 0), ("requery_food", None),
+for key, default in [("api_calls", 0), ("requery_food", None),
                      ("unmatched_foods", []), ("flagged_this_session", set())]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -323,7 +318,7 @@ def get_reranker(api_key):
         return None
     try:
         from modules.reranker_v2 import RerankerV2
-        return RerankerV2(api_key=api_key, cache=get_cache())
+        return RerankerV2(api_key=api_key)
     except Exception as e:
         st.warning(f"Could not load Claude reranker: {e}")
         return None
@@ -902,7 +897,6 @@ try:
 except Exception:
     _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 use_claude = bool(_api_key)
-cache = get_cache()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -956,113 +950,139 @@ if query:
     # Reset flag form on new query to prevent stale text_input stealing focus
     if st.session_state.get("show_flag_form") and st.session_state.get("_last_query") != query:
         st.session_state["show_flag_form"] = False
+
+    # ── Decide whether to run the search pipeline ──
+    # Skip if query hasn't changed and no Re-query was requested.
+    # This prevents wasteful API calls when the user clicks Flag, Confirm, etc.
+    _force_requery = (st.session_state.requery_food == query)
+    _query_changed = (query != st.session_state.get("_last_query"))
+    _has_cached_result = (st.session_state.get("_last_query") == query
+                          and "_last_result" in st.session_state
+                          and st.session_state["_last_result"] is not None)
+    _need_search = _query_changed or _force_requery or not _has_cached_result
+
     st.session_state["_last_query"] = query
 
-    # Check verified maps — skip expansion if both versions are verified
-    # BUT: if user clicked Re-query, bypass verified map and run full pipeline
-    _force_requery = (st.session_state.requery_food == query)
-    from modules.verified_map import VERIFIED_MAP_302
-    from modules.verified_map_40 import VERIFIED_MAP_40
-    _is_verified = (not _force_requery
-                    and query.lower().strip() in VERIFIED_MAP_302
-                    and query.lower().strip() in VERIFIED_MAP_40)
+    if _need_search:
+        # ── Run full search pipeline ──
+        from modules.verified_map import VERIFIED_MAP_302
+        from modules.verified_map_40 import VERIFIED_MAP_40
+        _is_verified = (not _force_requery
+                        and query.lower().strip() in VERIFIED_MAP_302
+                        and query.lower().strip() in VERIFIED_MAP_40)
 
-    expander = None
-    if use_claude and _api_key and not _is_verified:
-        expander = get_expander(_api_key)
+        expander = None
+        if use_claude and _api_key and not _is_verified:
+            expander = get_expander(_api_key)
 
-    with st.spinner("Searching BLS catalogs..."):
-        candidates = get_boosted_candidates(text_ret, query, top_k=30, expander=expander)
-    nq = candidates["query"]
+        with st.spinner("Searching BLS catalogs..."):
+            candidates = get_boosted_candidates(text_ret, query, top_k=30, expander=expander)
+        nq = candidates["query"]
 
-    # ── Resolve matches ──
-    result = None
-    result_from_claude = False
-    pcache_status_302 = None  # "verified" or "unverified" from persistent cache
-    pcache_status_40 = None
+        # ── Resolve matches ──
+        result = None
+        result_from_claude = False
+        pcache_status_302 = None  # "verified" or "unverified" from persistent cache
+        pcache_status_40 = None
 
-    # ── Check persistent cache BEFORE calling Sonnet ──
-    skip_cache = (st.session_state.requery_food == query)
-    is_flagged = _pcache.is_flagged(query)
+        # ── Check persistent cache BEFORE calling Sonnet ──
+        skip_cache = _force_requery
+        is_flagged = _pcache.is_flagged(query)
 
-    if use_claude and _api_key and not skip_cache and not is_flagged:
-        pc302 = _pcache.lookup(query, "BLS 3.02")
-        pc40 = _pcache.lookup(query, "BLS 4.0")
+        if use_claude and _api_key and not skip_cache and not is_flagged:
+            pc302 = _pcache.lookup(query, "BLS 3.02")
+            pc40 = _pcache.lookup(query, "BLS 4.0")
 
-        if pc302 or pc40:
-            from modules.reranker_v2 import RerankerResult, RankedMatch
-            result = RerankerResult(food_description=query)
-            result_from_claude = True
+            if pc302 or pc40:
+                from modules.reranker_v2 import RerankerResult, RankedMatch
+                result = RerankerResult(food_description=query)
+                result_from_claude = True
 
-            if pc302:
-                pcache_status_302 = pc302["status"]
-                result.bls302_matches = [RankedMatch(
-                    rank=1, code=pc302["code"], name=pc302["name"],
-                    confidence=pc302["confidence"],
-                    reasoning=f"Persistent cache ({pc302['status']})",
-                )]
-                result.bls302_source = "cached"
-            if pc40:
-                pcache_status_40 = pc40["status"]
-                result.bls40_matches = [RankedMatch(
-                    rank=1, code=pc40["code"], name=pc40["name"],
-                    confidence=pc40["confidence"],
-                    reasoning=f"Persistent cache ({pc40['status']})",
-                )]
-                result.bls40_source = "cached"
+                if pc302:
+                    pcache_status_302 = pc302["status"]
+                    result.bls302_matches = [RankedMatch(
+                        rank=1, code=pc302["code"], name=pc302["name"],
+                        confidence=pc302["confidence"],
+                        reasoning=f"Persistent cache ({pc302['status']})",
+                    )]
+                    result.bls302_source = "cached"
+                if pc40:
+                    pcache_status_40 = pc40["status"]
+                    result.bls40_matches = [RankedMatch(
+                        rank=1, code=pc40["code"], name=pc40["name"],
+                        confidence=pc40["confidence"],
+                        reasoning=f"Persistent cache ({pc40['status']})",
+                    )]
+                    result.bls40_source = "cached"
 
-            # If only one version was cached, still need API for the other
-            if not pc302 or not pc40:
-                reranker = get_reranker(_api_key)
-                if reranker:
-                    api_result = reranker.rerank(query, candidates)
-                    if not pc302 and api_result.bls302_matches:
-                        result.bls302_matches = api_result.bls302_matches
-                        result.bls302_source = api_result.bls302_source
-                    if not pc40 and api_result.bls40_matches:
-                        result.bls40_matches = api_result.bls40_matches
-                        result.bls40_source = api_result.bls40_source
-                    if api_result.claude_nova is not None:
-                        result.claude_nova = api_result.claude_nova
-                        result.claude_nova_reasoning = api_result.claude_nova_reasoning
+                # If only one version was cached, still need API for the other
+                if not pc302 or not pc40:
+                    reranker = get_reranker(_api_key)
+                    if reranker:
+                        api_result = reranker.rerank(query, candidates)
+                        if not pc302 and api_result.bls302_matches:
+                            result.bls302_matches = api_result.bls302_matches
+                            result.bls302_source = api_result.bls302_source
+                        if not pc40 and api_result.bls40_matches:
+                            result.bls40_matches = api_result.bls40_matches
+                            result.bls40_source = api_result.bls40_source
+                        if api_result.claude_nova is not None:
+                            result.claude_nova = api_result.claude_nova
+                            result.claude_nova_reasoning = api_result.claude_nova_reasoning
 
-    # ── Standard path: call Sonnet if no persistent cache hit ──
-    if result is None and use_claude and _api_key:
-        reranker = get_reranker(_api_key)
-        if reranker:
-            if skip_cache:
-                cache.delete(query)
-                st.session_state.requery_food = None
+        # ── Standard path: call Sonnet if no persistent cache hit ──
+        if result is None and use_claude and _api_key:
+            reranker = get_reranker(_api_key)
+            if reranker:
+                if skip_cache:
+                    st.session_state.requery_food = None
 
-            old_hits = reranker.session_cache_hits
-            old_calls = reranker.session_api_calls
+                old_calls = reranker.session_api_calls
 
-            with st.spinner("Analyzing candidates..."):
-                result = reranker.rerank(query, candidates, skip_cache=skip_cache)
+                with st.spinner("Analyzing candidates..."):
+                    result = reranker.rerank(query, candidates, skip_verified=skip_cache)
 
-            st.session_state.cache_hits += reranker.session_cache_hits - old_hits
-            st.session_state.api_calls += reranker.session_api_calls - old_calls
-            result_from_claude = True
+                st.session_state.api_calls += reranker.session_api_calls - old_calls
+                result_from_claude = True
 
-            # Store results in persistent cache
-            m302 = result.bls302_matches or []
-            m40 = result.bls40_matches or []
-            if m302 and result.bls302_source == "api":
-                _pcache.store(query, "BLS 3.02", {
-                    "code": m302[0].code, "name": m302[0].name,
-                    "full_result_json": json.dumps([m.to_dict() for m in m302], ensure_ascii=False),
-                }, m302[0].confidence)
-            if m40 and result.bls40_source == "api":
-                _pcache.store(query, "BLS 4.0", {
-                    "code": m40[0].code, "name": m40[0].name,
-                    "full_result_json": json.dumps([m.to_dict() for m in m40], ensure_ascii=False),
-                }, m40[0].confidence)
+                # Store results in persistent cache
+                m302 = result.bls302_matches or []
+                m40 = result.bls40_matches or []
+                if m302 and result.bls302_source == "api":
+                    _pcache.store(query, "BLS 3.02", {
+                        "code": m302[0].code, "name": m302[0].name,
+                        "full_result_json": json.dumps([m.to_dict() for m in m302], ensure_ascii=False),
+                    }, m302[0].confidence)
+                if m40 and result.bls40_source == "api":
+                    _pcache.store(query, "BLS 4.0", {
+                        "code": m40[0].code, "name": m40[0].name,
+                        "full_result_json": json.dumps([m.to_dict() for m in m40], ensure_ascii=False),
+                    }, m40[0].confidence)
 
-    if result is None or (result and result.error):
-        if result and result.error:
-            st.error(f"API error: {result.error}")
-        smart = get_smart_reranker()
-        result = smart.rerank(query, candidates)
+        if result is None or (result and result.error):
+            if result and result.error:
+                st.error(f"API error: {result.error}")
+            smart = get_smart_reranker()
+            result = smart.rerank(query, candidates)
+
+        # ── Save result to session state so reruns don't re-execute the pipeline ──
+        st.session_state["_last_result"] = {
+            "result": result,
+            "result_from_claude": result_from_claude,
+            "nq": nq,
+            "candidates": candidates,
+            "pcache_status_302": pcache_status_302,
+            "pcache_status_40": pcache_status_40,
+        }
+    else:
+        # ── Reuse cached result from session state ──
+        _cached = st.session_state["_last_result"]
+        result = _cached["result"]
+        result_from_claude = _cached["result_from_claude"]
+        nq = _cached["nq"]
+        candidates = _cached["candidates"]
+        pcache_status_302 = _cached["pcache_status_302"]
+        pcache_status_40 = _cached["pcache_status_40"]
 
     # ── Extract Claude NOVA if available ──
     claude_nova = getattr(result, "claude_nova", None)
@@ -1127,6 +1147,8 @@ if query:
                         _pcache.confirm(query, "BLS 3.02")
                     if pcache_status_40 == "unverified":
                         _pcache.confirm(query, "BLS 4.0")
+                    # Force re-search so UI reflects new "verified" status
+                    st.session_state.pop("_last_result", None)
                     st.rerun()
             btn_idx += 1
             with act_cols[btn_idx]:
