@@ -942,6 +942,11 @@ if not query:
     )
 
 if query:
+    # Reset flag form on new query to prevent stale text_input stealing focus
+    if st.session_state.get("show_flag_form") and st.session_state.get("_last_query") != query:
+        st.session_state["show_flag_form"] = False
+    st.session_state["_last_query"] = query
+
     # Check verified maps — skip expansion if both versions are verified
     from modules.verified_map import VERIFIED_MAP_302
     from modules.verified_map_40 import VERIFIED_MAP_40
@@ -1074,20 +1079,19 @@ if query:
                        source_text=source_text)
 
     # ── Action row (source + buttons, right-aligned) ──
-    has_cached = src302 == "cached" or src40 == "cached"
+    can_requery = result_from_claude or src302 in ("cached", "verified", "api")
     already_flagged = query in st.session_state.flagged_this_session
+    is_unverified = pcache_status_302 == "unverified" or pcache_status_40 == "unverified"
 
     with st.container():
         st.markdown('<div class="action-row">', unsafe_allow_html=True)
 
-        # Show verify/reject buttons for unverified persistent cache hits
-        is_unverified = pcache_status_302 == "unverified" or pcache_status_40 == "unverified"
-
         if is_unverified:
             act_cols = st.columns([4, 1, 1, 1, 1])
         else:
-            act_cols = st.columns([5, 1, 1])
+            act_cols = st.columns([4, 1, 1])
 
+        # Column 0: source label
         with act_cols[0]:
             if pcache_status_302 == "verified":
                 st.markdown('<span style="font-size:12px; color:#34c759;">✓ Verified</span>',
@@ -1099,17 +1103,18 @@ if query:
                 st.markdown(f'<span style="font-size:12px; color:#86868b;">{source_text}</span>',
                             unsafe_allow_html=True)
 
-        col_idx = 1
+        # Confirm/Reject for unverified persistent cache
+        btn_idx = 1
         if is_unverified:
-            with act_cols[col_idx]:
+            with act_cols[btn_idx]:
                 if st.button("Confirm", key="confirm_btn", type="secondary"):
                     if pcache_status_302 == "unverified":
                         _pcache.confirm(query, "BLS 3.02")
                     if pcache_status_40 == "unverified":
                         _pcache.confirm(query, "BLS 4.0")
                     st.rerun()
-            col_idx += 1
-            with act_cols[col_idx]:
+            btn_idx += 1
+            with act_cols[btn_idx]:
                 if st.button("Reject", key="reject_btn", type="secondary"):
                     if pcache_status_302 == "unverified":
                         _pcache.reject(query, "BLS 3.02")
@@ -1117,28 +1122,25 @@ if query:
                         _pcache.reject(query, "BLS 4.0")
                     st.session_state.requery_food = query
                     st.rerun()
-            col_idx += 1
+            btn_idx += 1
 
-        with act_cols[col_idx]:
-            if has_cached and not is_unverified:
+        # Re-query button (always available for cached/verified/API results)
+        with act_cols[btn_idx]:
+            if can_requery:
                 if st.button("Re-query", key="requery_btn", type="secondary"):
                     st.session_state.requery_food = query
                     st.rerun()
+        btn_idx += 1
 
-        last_col = col_idx + 1 if not is_unverified else col_idx + 1
-        if last_col < len(act_cols):
-            with act_cols[last_col]:
+        # Flag button
+        if btn_idx < len(act_cols):
+            with act_cols[btn_idx]:
                 if already_flagged:
                     st.markdown('<span style="font-size:12px; color:#34c759;">Flagged ✓</span>',
                                 unsafe_allow_html=True)
                 else:
                     if st.button("Flag", key="flag_btn", type="secondary"):
                         st.session_state["show_flag_form"] = True
-        else:
-            # Flag button didn't fit — show below
-            if not already_flagged:
-                if st.button("Flag", key="flag_btn", type="secondary"):
-                    st.session_state["show_flag_form"] = True
 
         st.markdown('</div>', unsafe_allow_html=True)
 
