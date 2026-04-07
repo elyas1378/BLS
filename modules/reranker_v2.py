@@ -304,11 +304,125 @@ class RerankerV2:
             confidence=d["confidence"], reasoning=d["reasoning"],
         ) for d in dicts]
 
+    def _build_combined_prompt(self, food_description: str,
+                               candidates_302: list[dict],
+                               candidates_40: list[dict],
+                               prep_state: str = None,
+                               fat_percent: str = None) -> str:
+        """Build a single user message for BOTH BLS versions."""
+        parts = [f'## Food description: "{food_description}"']
+
+        context = []
+        if prep_state:
+            context.append(f"Preparation: {prep_state}")
+        if fat_percent:
+            context.append(f"Fat: {fat_percent}%")
+        if context:
+            parts.append(f"Context: {', '.join(context)}")
+
+        parts.append(
+            "\nYou must provide matches for BOTH BLS versions below. "
+            "Each version has its own candidate list — pick ONLY from "
+            "the corresponding list."
+        )
+
+        parts.append("\n=== BLS 3.02 Candidates ===")
+        if candidates_302:
+            for i, c in enumerate(candidates_302, 1):
+                line = f"  {i:2d}. [{c['code']}] {c['name_de']}"
+                if c.get('name_en'):
+                    line += f" / {c['name_en']}"
+                line += f"  (score: {c['score']:.3f})"
+                parts.append(line)
+        else:
+            parts.append("  No candidates available.")
+
+        parts.append("\n=== BLS 4.0 Candidates ===")
+        if candidates_40:
+            for i, c in enumerate(candidates_40, 1):
+                line = f"  {i:2d}. [{c['code']}] {c['name_de']}"
+                if c.get('name_en'):
+                    line += f" / {c['name_en']}"
+                line += f"  (score: {c['score']:.3f})"
+                parts.append(line)
+        else:
+            parts.append("  No candidates available.")
+
+        parts.append(
+            "\nPick the best 3 from EACH list above. "
+            "ONLY use codes from the corresponding list."
+        )
+        return "\n".join(parts)
+
+    def _call_claude_combined(self, prompt: str,
+                              cand_codes_302: set, cand_codes_40: set
+                              ) -> dict:
+        """Call Claude once for both BLS versions.
+
+        Returns dict with keys:
+            matches_302, matches_40, nova_score, nova_reasoning
+        """
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=1200,
+            system=self.system_prompt,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+        )
+
+        text = response.content[0].text.strip()
+
+        # Strip markdown fences
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
+
+        parsed = json.loads(text)
+
+        nova_score = parsed.get("nova_score")
+        nova_reasoning = parsed.get("nova_reasoning", "")
+        if isinstance(nova_score, int) and nova_score not in (1, 2, 3, 4):
+            nova_score = None
+
+        def _validate(matches_raw, valid_codes, cand_codes):
+            results = []
+            for m in matches_raw:
+                code = m.get("code", "")
+                if code not in cand_codes:
+                    if code not in valid_codes:
+                        continue
+                    m["confidence"] = min(m.get("confidence", 0.5), 0.5)
+                    m["reasoning"] = f"[NOT IN CANDIDATES] {m.get('reasoning', '')}"
+                if code not in valid_codes:
+                    continue
+                results.append(RankedMatch(
+                    rank=m.get("rank", 0), code=code,
+                    name=m.get("name", ""), confidence=m.get("confidence", 0),
+                    reasoning=m.get("reasoning", ""),
+                ))
+            return results[:3]
+
+        # Parse both sections
+        bls302_data = parsed.get("bls302", {})
+        bls40_data = parsed.get("bls40", {})
+        matches_302_raw = bls302_data.get("matches", []) if isinstance(bls302_data, dict) else []
+        matches_40_raw = bls40_data.get("matches", []) if isinstance(bls40_data, dict) else []
+
+        return {
+            "matches_302": _validate(matches_302_raw, self._valid_302, cand_codes_302),
+            "matches_40": _validate(matches_40_raw, self._valid_40, cand_codes_40),
+            "nova_score": nova_score,
+            "nova_reasoning": nova_reasoning,
+        }
+
     def rerank(self, food_description: str, retrieval_results: dict,
                skip_cache: bool = False) -> RerankerResult:
         """
         Re-rank candidates for BOTH BLS versions.
         Uses verified lookup first (free), then cache, then Claude.
+        Combined single API call when both versions need re-ranking.
         """
         result = RerankerResult(food_description=food_description)
         nq = retrieval_results["query"]
@@ -340,8 +454,14 @@ class RerankerV2:
             if v302 and v40:
                 return result
 
-            # ── BLS 3.02: cache → Claude ──
-            if not v302 and retrieval_results.get("bls302"):
+            # ── Check cache for both versions ──
+            need_api_302 = not v302 and bool(retrieval_results.get("bls302"))
+            need_api_40 = not v40 and bool(retrieval_results.get("bls40"))
+
+            cands_302 = []
+            cands_40 = []
+
+            if need_api_302:
                 cached = None
                 if self.cache and not skip_cache:
                     cached = self.cache.get(food_description, "BLS 3.02")
@@ -349,40 +469,12 @@ class RerankerV2:
                     result.bls302_matches = self._dicts_to_matches(cached)
                     result.bls302_source = "cached"
                     self.session_cache_hits += 1
+                    need_api_302 = False
                 else:
                     cands_302 = [c.to_dict() if hasattr(c, "to_dict") else c
                                  for c in retrieval_results["bls302"]]
-                    cand_codes_302 = {c["code"] for c in cands_302}
-                    prompt_302 = self._build_prompt(
-                        food_description, cands_302, "BLS 3.02",
-                        prep_state=nq.prep_state, fat_percent=nq.fat_percent,
-                    )
-                    matches, nova, nova_reason = self._call_claude(
-                        prompt_302, self._valid_302, cand_codes_302
-                    )
-                    result.bls302_matches = matches
-                    # Store Claude's NOVA (first API call wins)
-                    if nova is not None and result.claude_nova is None:
-                        result.claude_nova = nova
-                        result.claude_nova_reasoning = nova_reason
-                    self.session_api_calls += 1
-                    result.bls302_source = "api"
 
-                    # Fallback if Claude returned nothing
-                    if not result.bls302_matches and cands_302:
-                        for i, c in enumerate(cands_302[:3], 1):
-                            result.bls302_matches.append(RankedMatch(
-                                rank=i, code=c["code"], name=c["name_de"],
-                                confidence=c["score"] * 0.7,
-                                reasoning="Fallback: Claude returned no valid codes",
-                            ))
-                    # Save to cache
-                    if self.cache and result.bls302_matches:
-                        self.cache.put(food_description, "BLS 3.02",
-                                       self._matches_to_dicts(result.bls302_matches))
-
-            # ── BLS 4.0: cache → Claude ──
-            if not v40 and retrieval_results.get("bls40"):
+            if need_api_40:
                 cached = None
                 if self.cache and not skip_cache:
                     cached = self.cache.get(food_description, "BLS 4.0")
@@ -390,34 +482,109 @@ class RerankerV2:
                     result.bls40_matches = self._dicts_to_matches(cached)
                     result.bls40_source = "cached"
                     self.session_cache_hits += 1
+                    need_api_40 = False
                 else:
                     cands_40 = [c.to_dict() if hasattr(c, "to_dict") else c
                                 for c in retrieval_results["bls40"]]
-                    cand_codes_40 = {c["code"] for c in cands_40}
-                    prompt_40 = self._build_prompt(
-                        food_description, cands_40, "BLS 4.0",
-                        prep_state=nq.prep_state, fat_percent=nq.fat_percent,
-                    )
-                    matches, nova, nova_reason = self._call_claude(
-                        prompt_40, self._valid_40, cand_codes_40
-                    )
-                    result.bls40_matches = matches
-                    if nova is not None and result.claude_nova is None:
-                        result.claude_nova = nova
-                        result.claude_nova_reasoning = nova_reason
-                    self.session_api_calls += 1
-                    result.bls40_source = "api"
 
-                    if not result.bls40_matches and cands_40:
-                        for i, c in enumerate(cands_40[:3], 1):
-                            result.bls40_matches.append(RankedMatch(
-                                rank=i, code=c["code"], name=c["name_de"],
-                                confidence=c["score"] * 0.7,
-                                reasoning="Fallback: Claude returned no valid codes",
-                            ))
-                    if self.cache and result.bls40_matches:
-                        self.cache.put(food_description, "BLS 4.0",
-                                       self._matches_to_dicts(result.bls40_matches))
+            # ── API call ──
+            if need_api_302 and need_api_40:
+                # Combined single call for both versions
+                cand_codes_302 = {c["code"] for c in cands_302}
+                cand_codes_40 = {c["code"] for c in cands_40}
+                prompt = self._build_combined_prompt(
+                    food_description, cands_302, cands_40,
+                    prep_state=nq.prep_state, fat_percent=nq.fat_percent,
+                )
+                combined = self._call_claude_combined(
+                    prompt, cand_codes_302, cand_codes_40
+                )
+                result.bls302_matches = combined["matches_302"]
+                result.bls40_matches = combined["matches_40"]
+                if combined["nova_score"] is not None:
+                    result.claude_nova = combined["nova_score"]
+                    result.claude_nova_reasoning = combined["nova_reasoning"]
+                self.session_api_calls += 1
+                result.bls302_source = "api"
+                result.bls40_source = "api"
+
+                # Fallback if Claude returned nothing
+                if not result.bls302_matches and cands_302:
+                    for i, c in enumerate(cands_302[:3], 1):
+                        result.bls302_matches.append(RankedMatch(
+                            rank=i, code=c["code"], name=c["name_de"],
+                            confidence=c["score"] * 0.7,
+                            reasoning="Fallback: Claude returned no valid codes",
+                        ))
+                if not result.bls40_matches and cands_40:
+                    for i, c in enumerate(cands_40[:3], 1):
+                        result.bls40_matches.append(RankedMatch(
+                            rank=i, code=c["code"], name=c["name_de"],
+                            confidence=c["score"] * 0.7,
+                            reasoning="Fallback: Claude returned no valid codes",
+                        ))
+
+                # Save to cache
+                if self.cache and result.bls302_matches:
+                    self.cache.put(food_description, "BLS 3.02",
+                                   self._matches_to_dicts(result.bls302_matches))
+                if self.cache and result.bls40_matches:
+                    self.cache.put(food_description, "BLS 4.0",
+                                   self._matches_to_dicts(result.bls40_matches))
+
+            elif need_api_302:
+                # Only 3.02 needs API (4.0 was cached/verified)
+                cand_codes_302 = {c["code"] for c in cands_302}
+                prompt_302 = self._build_prompt(
+                    food_description, cands_302, "BLS 3.02",
+                    prep_state=nq.prep_state, fat_percent=nq.fat_percent,
+                )
+                matches, nova, nova_reason = self._call_claude(
+                    prompt_302, self._valid_302, cand_codes_302
+                )
+                result.bls302_matches = matches
+                if nova is not None and result.claude_nova is None:
+                    result.claude_nova = nova
+                    result.claude_nova_reasoning = nova_reason
+                self.session_api_calls += 1
+                result.bls302_source = "api"
+                if not result.bls302_matches and cands_302:
+                    for i, c in enumerate(cands_302[:3], 1):
+                        result.bls302_matches.append(RankedMatch(
+                            rank=i, code=c["code"], name=c["name_de"],
+                            confidence=c["score"] * 0.7,
+                            reasoning="Fallback: Claude returned no valid codes",
+                        ))
+                if self.cache and result.bls302_matches:
+                    self.cache.put(food_description, "BLS 3.02",
+                                   self._matches_to_dicts(result.bls302_matches))
+
+            elif need_api_40:
+                # Only 4.0 needs API (3.02 was cached/verified)
+                cand_codes_40 = {c["code"] for c in cands_40}
+                prompt_40 = self._build_prompt(
+                    food_description, cands_40, "BLS 4.0",
+                    prep_state=nq.prep_state, fat_percent=nq.fat_percent,
+                )
+                matches, nova, nova_reason = self._call_claude(
+                    prompt_40, self._valid_40, cand_codes_40
+                )
+                result.bls40_matches = matches
+                if nova is not None and result.claude_nova is None:
+                    result.claude_nova = nova
+                    result.claude_nova_reasoning = nova_reason
+                self.session_api_calls += 1
+                result.bls40_source = "api"
+                if not result.bls40_matches and cands_40:
+                    for i, c in enumerate(cands_40[:3], 1):
+                        result.bls40_matches.append(RankedMatch(
+                            rank=i, code=c["code"], name=c["name_de"],
+                            confidence=c["score"] * 0.7,
+                            reasoning="Fallback: Claude returned no valid codes",
+                        ))
+                if self.cache and result.bls40_matches:
+                    self.cache.put(food_description, "BLS 4.0",
+                                   self._matches_to_dicts(result.bls40_matches))
 
         except Exception as e:
             result.error = str(e)
