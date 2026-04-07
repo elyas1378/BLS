@@ -948,9 +948,12 @@ if query:
     st.session_state["_last_query"] = query
 
     # Check verified maps — skip expansion if both versions are verified
+    # BUT: if user clicked Re-query, bypass verified map and run full pipeline
+    _force_requery = (st.session_state.requery_food == query)
     from modules.verified_map import VERIFIED_MAP_302
     from modules.verified_map_40 import VERIFIED_MAP_40
-    _is_verified = (query.lower().strip() in VERIFIED_MAP_302
+    _is_verified = (not _force_requery
+                    and query.lower().strip() in VERIFIED_MAP_302
                     and query.lower().strip() in VERIFIED_MAP_40)
 
     expander = None
@@ -1147,8 +1150,9 @@ if query:
     # ── Flag form (appears after clicking Flag) ──
     if not already_flagged and st.session_state.get("show_flag_form"):
         with st.container():
-            flag_note = st.text_input("What's wrong? (optional)", key="flag_note",
-                                      placeholder="e.g. wrong code, wrong NOVA, ...")
+            flag_note = st.text_area("What's wrong? (optional)", key="flag_note",
+                                     placeholder="e.g. wrong code, wrong NOVA, ...",
+                                     height=68)
             if st.button("Submit flag", key="submit_flag_btn", type="primary"):
                 from datetime import datetime
                 m302 = result.bls302_matches or []
@@ -1186,6 +1190,7 @@ if query:
                         json.dump(local_flags, f, ensure_ascii=False, indent=1)
                 st.session_state.flagged_this_session.add(query)
                 st.session_state["show_flag_form"] = False
+                st.session_state.pop("flag_note", None)
                 st.rerun()
 
     # ── More matches (2nd and 3rd choices) ──
