@@ -568,36 +568,40 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
 
     # ── Merge Haiku + Gemini pre-retrieval search terms ──
     gemini_search_terms = []
+    _gemini_status = "ok"  # "ok", "timeout", "error"
     if _gemini_future is not None:
         try:
             gemini_search_terms = _gemini_future.result(timeout=3)
         except (FuturesTimeout, TimeoutError):
             print(f"  ⚠ Gemini timed out (>3s) for '{query[:40]}' — using Haiku only")
             _gemini_future.cancel()
-            gemini_search_terms = []
+            _gemini_status = "timeout"
         except Exception as e:
             print(f"  ⚠ Gemini failed for '{query[:40]}': {type(e).__name__} — using Haiku only")
-            gemini_search_terms = []
+            _gemini_status = "error"
 
     # Merge and deduplicate
     haiku_set = set(t.lower().strip() for t in haiku_search_terms)
     gemini_set = set(t.lower().strip() for t in gemini_search_terms)
-    merged_terms_set = haiku_set | gemini_set
     # Build final list preserving original casing — Haiku terms first, then Gemini-only
     merged_terms = list(haiku_search_terms)
     for t in gemini_search_terms:
         if t.lower().strip() not in haiku_set:
             merged_terms.append(t)
 
+    # Track which terms produced retrieval hits
+    _term_hits = {}  # term → bool
     if merged_terms:
         print(f"  Haiku: {len(haiku_search_terms)} terms, Gemini: {len(gemini_search_terms)} terms, Merged: {len(merged_terms)} unique terms")
         for term in merged_terms:
             try:
                 r = text_ret.search(term, top_k=5)
+                found = bool(r.get("bls302") or r.get("bls40"))
+                _term_hits[term] = found
                 merge(all_302, r.get("bls302", []), 0.95)
                 merge(all_40, r.get("bls40", []), 0.95)
             except Exception:
-                pass
+                _term_hits[term] = False
 
     # ── Vocab-based compound fallback for unknown long tokens ──
     if any_unknown:
@@ -868,7 +872,14 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
 
     return {"query": nq,
             "bls302": sort_trim(all_302, top_k, modifier_302_codes),
-            "bls40": sort_trim(all_40, top_k, modifier_40_codes)}
+            "bls40": sort_trim(all_40, top_k, modifier_40_codes),
+            "expansion": {
+                "haiku_terms": haiku_search_terms,
+                "gemini_terms": gemini_search_terms,
+                "merged_terms": merged_terms,
+                "term_hits": _term_hits,
+                "gemini_status": _gemini_status,
+            }}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1208,6 +1219,50 @@ if query:
             f"**Candidates:** {len(candidates.get('bls302', []))} (3.02) / "
             f"{len(candidates.get('bls40', []))} (4.0)"
         )
+
+    # ── Expansion details ──
+    exp_info = candidates.get("expansion", {})
+    h_terms = exp_info.get("haiku_terms", [])
+    g_terms = exp_info.get("gemini_terms", [])
+    m_terms = exp_info.get("merged_terms", [])
+    t_hits = exp_info.get("term_hits", {})
+    g_status = exp_info.get("gemini_status", "ok")
+
+    if h_terms or g_terms:
+        with st.expander("Expansion details", expanded=False):
+            haiku_lower = set(t.lower().strip() for t in h_terms)
+
+            ec1, ec2 = st.columns(2)
+            with ec1:
+                st.markdown(f"**Haiku** ({len(h_terms)} terms)")
+                for t in h_terms:
+                    hit = "✓" if t_hits.get(t, False) else "✗"
+                    st.markdown(f"- {hit} {t}")
+            with ec2:
+                if g_status == "timeout":
+                    st.markdown("**Gemini** — timed out (>3s)")
+                elif g_status == "error":
+                    st.markdown("**Gemini** — failed")
+                elif not g_terms:
+                    st.markdown("**Gemini** — no terms returned")
+                else:
+                    st.markdown(f"**Gemini** ({len(g_terms)} terms)")
+                    for t in g_terms:
+                        hit = "✓" if t_hits.get(t, False) else "✗"
+                        is_new = t.lower().strip() not in haiku_lower
+                        if is_new:
+                            st.markdown(f'- {hit} <span style="color:#0071e3;">{t}</span> *(new)*',
+                                        unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"- {hit} {t}")
+
+            gemini_only = [t for t in g_terms if t.lower().strip() not in haiku_lower]
+            hits_count = sum(1 for v in t_hits.values() if v)
+            st.markdown(
+                f"**Merged:** {len(m_terms)} unique terms | "
+                f"**Gemini-only:** {len(gemini_only)} | "
+                f"**Retrieval hits:** {hits_count}/{len(m_terms)}"
+            )
 
     # ── Unmatched foods (in main area) ──
     if st.session_state.unmatched_foods:
