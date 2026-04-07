@@ -452,7 +452,7 @@ def render_result_card(query_text, nq, result, flag, src302, src40,
     st.markdown(html, unsafe_allow_html=True)
 
 
-_search_pool = ThreadPoolExecutor(max_workers=4)
+_search_pool = ThreadPoolExecutor(max_workers=2)
 
 def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     from modules.normalizer import normalize
@@ -520,12 +520,11 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     haiku_search_terms = []
     pre_retrieval_haiku_ran = False
 
-    # Fire Gemini expansion in parallel with Haiku (collected later)
+    # Fire Gemini expansion in parallel with Haiku
     _gemini_future = None
     if expander is not None:
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-        _gemini_executor = ThreadPoolExecutor(max_workers=1)
-        _gemini_future = _gemini_executor.submit(expander.expand_gemini, query)
+        from concurrent.futures import TimeoutError as FuturesTimeout
+        _gemini_future = _search_pool.submit(expander.expand_gemini, query)
 
     if any_unknown and expander is not None:
         unknown_tokens = [t for t in corrected_query.split()
@@ -547,6 +546,22 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     elif corrections_log:
         # Tier 1 made corrections — use the corrected query
         query_clean = corrected_query
+
+    # ── Collect Gemini result NOW, before CPU-bound text searches start ──
+    # SequenceMatcher holds the GIL; collecting Gemini's HTTP response first
+    # prevents GIL contention from causing timeouts.
+    gemini_search_terms = []
+    _gemini_status = "ok"  # "ok", "timeout", "error"
+    if _gemini_future is not None:
+        try:
+            gemini_search_terms = _gemini_future.result(timeout=3)
+        except (FuturesTimeout, TimeoutError):
+            print(f"  ⚠ Gemini timed out (>3s) for '{query[:40]}' — using Haiku only")
+            _gemini_future.cancel()
+            _gemini_status = "timeout"
+        except Exception as e:
+            print(f"  ⚠ Gemini failed for '{query[:40]}': {type(e).__name__} — using Haiku only")
+            _gemini_status = "error"
 
     # Split into main dish + modifiers at connectors
     _CONNECTORS = r'\s+(?:mit|und|aus|in|auf|ohne|an|nach|vom|zum|dazu|plus|à la)\s+'
@@ -581,18 +596,7 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
                 merge(all_40, r.get("bls40", []), weight)
 
     # ── Merge Haiku + Gemini pre-retrieval search terms ──
-    gemini_search_terms = []
-    _gemini_status = "ok"  # "ok", "timeout", "error"
-    if _gemini_future is not None:
-        try:
-            gemini_search_terms = _gemini_future.result(timeout=3)
-        except (FuturesTimeout, TimeoutError):
-            print(f"  ⚠ Gemini timed out (>3s) for '{query[:40]}' — using Haiku only")
-            _gemini_future.cancel()
-            _gemini_status = "timeout"
-        except Exception as e:
-            print(f"  ⚠ Gemini failed for '{query[:40]}': {type(e).__name__} — using Haiku only")
-            _gemini_status = "error"
+    # (Gemini result was already collected above, before text searches)
 
     # Merge and deduplicate
     haiku_set = set(t.lower().strip() for t in haiku_search_terms)
