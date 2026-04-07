@@ -732,15 +732,18 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
         if best_302 < 1.5 or best_40 < 1.5:
             expansion_terms = expander.expand(query)
             _old_expansion_ran = True
+            haiku_search_terms.extend(expansion_terms)  # track for expansion details
             for term in expansion_terms:
                 try:
                     r = text_ret.search(term, top_k=5)
+                    found = bool(r.get("bls302") or r.get("bls40"))
+                    _term_hits[term] = found
                     if best_302 < 1.5:
                         merge(all_302, r.get("bls302", []), 0.95)
                     if best_40 < 1.5:
                         merge(all_40, r.get("bls40", []), 0.95)
                 except Exception:
-                    pass
+                    _term_hits[term] = False
 
     # ── Late-stage Haiku rescue ──
     if expander is not None and not haiku_search_terms and not _old_expansion_ran:
@@ -786,13 +789,16 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             try:
                 late_terms = expander.expand(query)
                 if late_terms:
+                    haiku_search_terms.extend(late_terms)  # track for expansion details
                     for term in late_terms:
                         try:
                             r = text_ret.search(term, top_k=10)
+                            found = bool(r.get("bls302") or r.get("bls40"))
+                            _term_hits[term] = found
                             merge(all_302, r.get("bls302", []), 0.95)
                             merge(all_40, r.get("bls40", []), 0.95)
                         except Exception:
-                            pass
+                            _term_hits[term] = False
             except Exception:
                 pass
 
@@ -876,7 +882,6 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             "expansion": {
                 "haiku_terms": haiku_search_terms,
                 "gemini_terms": gemini_search_terms,
-                "merged_terms": merged_terms,
                 "term_hits": _term_hits,
                 "gemini_status": _gemini_status,
             }}
@@ -1231,9 +1236,11 @@ if query:
     exp_info = candidates.get("expansion", {})
     h_terms = exp_info.get("haiku_terms", [])
     g_terms = exp_info.get("gemini_terms", [])
-    m_terms = exp_info.get("merged_terms", [])
     t_hits = exp_info.get("term_hits", {})
     g_status = exp_info.get("gemini_status", "ok")
+    # Rebuild merged list: Haiku first, then Gemini-only
+    _h_lower = set(t.lower().strip() for t in h_terms)
+    m_terms = list(h_terms) + [t for t in g_terms if t.lower().strip() not in _h_lower]
 
     if h_terms or g_terms:
         with st.expander("Expansion details", expanded=False):
