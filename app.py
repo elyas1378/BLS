@@ -554,9 +554,9 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     _gemini_status = "ok"  # "ok", "timeout", "error"
     if _gemini_future is not None:
         try:
-            gemini_search_terms = _gemini_future.result(timeout=3)
+            gemini_search_terms = _gemini_future.result(timeout=5)
         except (FuturesTimeout, TimeoutError):
-            print(f"  ⚠ Gemini timed out (>3s) for '{query[:40]}' — using Haiku only")
+            print(f"  ⚠ Gemini timed out (>5s) for '{query[:40]}' — using Haiku only")
             _gemini_future.cancel()
             _gemini_status = "timeout"
         except Exception as e:

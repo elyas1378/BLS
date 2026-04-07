@@ -199,6 +199,7 @@ class QueryExpander:
                 gemini_key = st.secrets.get("GEMINI_API_KEY")
             except Exception:
                 pass
+        print(f"  Gemini: key={'found' if gemini_key else 'MISSING'}, model=gemini-2.5-flash")
         if not gemini_key:
             return []
 
