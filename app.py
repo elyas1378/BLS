@@ -929,7 +929,8 @@ with st.form("search_form", clear_on_submit=False, border=False):
         key="food_query",
         label_visibility="collapsed",
     )
-    submitted = st.form_submit_button("Search", type="primary", use_container_width=True)
+    submitted = st.form_submit_button("Search")
+st.markdown('<style>[data-testid="stFormSubmitButton"]{display:none}</style>', unsafe_allow_html=True)
 
 # Determine active query: form submit, re-query trigger, or nothing
 if submitted and query_input:
