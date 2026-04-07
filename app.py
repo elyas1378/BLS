@@ -913,7 +913,7 @@ with st.spinner("Loading BLS catalogs..."):
     text_ret = load_text_retriever()
 
 # Peek at query to decide layout (hero vs compact)
-_has_query = bool(st.session_state.get("food_query", ""))
+_has_query = bool(st.session_state.get("active_query", ""))
 
 if not _has_query:
     # STATE 1: Landing page — big centered hero
@@ -922,12 +922,24 @@ if not _has_query:
         <p class="hero-sub">Type a food name — we'll match it to the<br>BLS nutritional database instantly.</p>
     </div>""", unsafe_allow_html=True)
 
-query = st.text_input(
-    "Food description",
-    placeholder="Haferflocken, Döner, Chicken salad...",
-    key="food_query",
-    label_visibility="collapsed",
-)
+with st.form("search_form", clear_on_submit=False, border=False):
+    query_input = st.text_input(
+        "Food description",
+        placeholder="Haferflocken, Döner, Chicken salad...",
+        key="food_query",
+        label_visibility="collapsed",
+    )
+    submitted = st.form_submit_button("Search", type="primary", use_container_width=True)
+
+# Determine active query: form submit, re-query trigger, or nothing
+if submitted and query_input:
+    query = query_input
+    st.session_state["active_query"] = query
+elif st.session_state.get("requery_food"):
+    query = st.session_state.get("food_query", "")
+    st.session_state["active_query"] = query
+else:
+    query = st.session_state.get("active_query", "")
 
 if not query:
     st.markdown(
