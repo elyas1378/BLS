@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pandas as pd
@@ -451,10 +452,12 @@ def render_result_card(query_text, nq, result, flag, src302, src40,
     st.markdown(html, unsafe_allow_html=True)
 
 
+_search_pool = ThreadPoolExecutor(max_workers=4)
+
 def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     from modules.normalizer import normalize
     from modules.concept_expansions import CONCEPT_EXPANSION
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import as_completed
 
     nq = normalize(query)
     all_302, all_40 = {}, {}
@@ -472,7 +475,7 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             return []
         futures = {}
         for term, weight in terms_with_weights:
-            f = text_ret._pool.submit(text_ret.search, term, tk)
+            f = _search_pool.submit(text_ret.search, term, tk)
             futures[f] = (term, weight)
         results = []
         for f in as_completed(futures):
