@@ -922,12 +922,15 @@ if not _has_query:
         <p class="hero-sub">Type a food name — we'll match it to the<br>BLS nutritional database instantly.</p>
     </div>""", unsafe_allow_html=True)
 
-query = st.text_input(
-    "Food description",
-    placeholder="Haferflocken, Döner, Chicken salad...",
-    key="food_query",
-    label_visibility="collapsed",
-)
+with st.form("search_form", clear_on_submit=False, border=False):
+    query = st.text_input(
+        "Food description",
+        placeholder="Haferflocken, Döner, Chicken salad...",
+        key="food_query",
+        label_visibility="collapsed",
+    )
+    st.form_submit_button("Search", type="secondary")
+st.markdown('<style>[data-testid="stFormSubmitButton"]{display:none}</style>', unsafe_allow_html=True)
 
 if not query:
     st.markdown(
@@ -1095,9 +1098,9 @@ if query:
         st.markdown('<div class="action-row">', unsafe_allow_html=True)
 
         if is_unverified:
-            act_cols = st.columns([4, 1, 1, 1, 1])
+            act_cols = st.columns([3, 1.2, 1.2, 1.2, 1.2])
         else:
-            act_cols = st.columns([4, 1, 1])
+            act_cols = st.columns([3, 1.5, 1.5])
 
         # Column 0: source label
         with act_cols[0]:
