@@ -316,8 +316,9 @@ class RerankerV2:
 
         try:
             # ── TIER 0: Verified lookup (skip Claude entirely) ──
-            v302 = VERIFIED_MAP_302.get(original_lower)
-            v40 = VERIFIED_MAP_40.get(original_lower)
+            # skip_cache also skips verified maps (used by Re-query)
+            v302 = None if skip_cache else VERIFIED_MAP_302.get(original_lower)
+            v40 = None if skip_cache else VERIFIED_MAP_40.get(original_lower)
 
             if v302:
                 name = self._names_302.get(v302, v302)
