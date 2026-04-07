@@ -1098,9 +1098,9 @@ if query:
         st.markdown('<div class="action-row">', unsafe_allow_html=True)
 
         if is_unverified:
-            act_cols = st.columns([3, 1.2, 1.2, 1.2, 1.2])
+            act_cols = st.columns([2.5, 1.2, 1.2, 1.2, 1.2, 1.2])
         else:
-            act_cols = st.columns([3, 1.5, 1.5])
+            act_cols = st.columns([3, 1.2, 1.2, 1.2])
 
         # Column 0: source label
         with act_cols[0]:
@@ -1114,8 +1114,16 @@ if query:
                 st.markdown(f'<span style="font-size:12px; color:#86868b;">{source_text}</span>',
                             unsafe_allow_html=True)
 
-        # Confirm/Reject for unverified persistent cache
         btn_idx = 1
+
+        # New search button
+        with act_cols[btn_idx]:
+            if st.button("New search", key="new_search_btn", type="secondary"):
+                st.session_state["food_query"] = ""
+                st.rerun()
+        btn_idx += 1
+
+        # Confirm/Reject for unverified persistent cache
         if is_unverified:
             with act_cols[btn_idx]:
                 if st.button("Confirm", key="confirm_btn", type="secondary"):
