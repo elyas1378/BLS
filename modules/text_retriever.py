@@ -19,11 +19,13 @@ Then applies BLS code rules to pick the best variant:
 
 from __future__ import annotations
 
+import bisect
 import re
 import sys
 from pathlib import Path
 from difflib import SequenceMatcher
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 
@@ -226,6 +228,13 @@ class TextMatchRetriever:
         self._word_index_302 = self._build_word_index(self.catalog_302)
         self._word_index_40 = self._build_word_index(self.catalog_40)
 
+        # Build sorted prefix index for O(log n) prefix matching
+        self._prefix_keys_302 = sorted(self._word_index_302.keys())
+        self._prefix_keys_40 = sorted(self._word_index_40.keys())
+
+        # Thread pool for parallel catalog searches
+        self._pool = ThreadPoolExecutor(max_workers=4)
+
         if verbose:
             print(f"  Ready ✓")
 
@@ -252,8 +261,21 @@ class TextMatchRetriever:
                         index[w].append(idx)
         return index
 
+    @staticmethod
+    def _prefix_lookup(prefix: str, sorted_keys: list, word_index: dict,
+                       limit: int = 50) -> list[int]:
+        """O(log n) prefix lookup using bisect on a sorted key list."""
+        lo = bisect.bisect_left(sorted_keys, prefix)
+        results = []
+        # Forward scan: keys starting with prefix
+        i = lo
+        while i < len(sorted_keys) and sorted_keys[i].startswith(prefix):
+            results.extend(word_index[sorted_keys[i]][:limit])
+            i += 1
+        return results
+
     def _text_search(self, query: str, catalog: pd.DataFrame, word_index: dict,
-                     top_k: int = 20) -> list[TextCandidate]:
+                     top_k: int = 20, prefix_keys: list = None) -> list[TextCandidate]:
         """
         Multi-strategy text search:
         1. Exact name match
@@ -291,10 +313,11 @@ class TextMatchRetriever:
         for word in all_search_words:
             if word in word_index:
                 candidate_indices.update(word_index[word])
-            # Also try prefix matching for partial words
-            for w in word_index:
-                if w.startswith(word) or word.startswith(w):
-                    candidate_indices.update(word_index[w][:50])  # limit
+            # O(log n) prefix matching via sorted key list + bisect
+            if prefix_keys is not None:
+                candidate_indices.update(
+                    self._prefix_lookup(word, prefix_keys, word_index, 50)
+                )
 
         for idx in candidate_indices:
             if idx >= len(catalog):
@@ -558,6 +581,16 @@ class TextMatchRetriever:
 
         return score
 
+    def _search_302(self, query: str, top_k: int) -> list[TextCandidate]:
+        """Search BLS 3.02 catalog."""
+        return self._text_search(query, self.catalog_302, self._word_index_302,
+                                 top_k, self._prefix_keys_302)
+
+    def _search_40(self, query: str, top_k: int) -> list[TextCandidate]:
+        """Search BLS 4.0 catalog."""
+        return self._text_search(query, self.catalog_40, self._word_index_40,
+                                 top_k, self._prefix_keys_40)
+
     def search(self, food_description: str, top_k: int = 20,
                normalize_input: bool = True):
         """
@@ -570,37 +603,32 @@ class TextMatchRetriever:
 
         if normalize_input:
             nq = normalize(food_description)
-            # Search with BOTH original and cleaned text, merge results
-            results_302_orig = self._text_search(
-                food_description, self.catalog_302, self._word_index_302, top_k
-            )
-            results_302_clean = self._text_search(
-                nq.cleaned, self.catalog_302, self._word_index_302, top_k
-            )
-            results_302 = self._merge(results_302_orig, results_302_clean, top_k)
 
-            results_40_orig = self._text_search(
-                food_description, self.catalog_40, self._word_index_40, top_k
-            )
-            results_40_clean = self._text_search(
-                nq.cleaned, self.catalog_40, self._word_index_40, top_k
-            )
-            results_40 = self._merge(results_40_orig, results_40_clean, top_k)
+            # Collect all query variants to search
+            queries = [food_description]
+            if nq.cleaned != food_description.lower().strip():
+                queries.append(nq.cleaned)
+            queries.extend(nq.search_variants)
 
-            # Also search compound split/join variants for consistency
-            for variant in nq.search_variants:
-                v302 = self._text_search(variant, self.catalog_302, self._word_index_302, top_k)
-                v40 = self._text_search(variant, self.catalog_40, self._word_index_40, top_k)
-                results_302 = self._merge(results_302, v302, top_k)
-                results_40 = self._merge(results_40, v40, top_k)
+            # Fire all searches in parallel (both catalogs × all variants)
+            futures_302 = [self._pool.submit(self._search_302, q, top_k) for q in queries]
+            futures_40 = [self._pool.submit(self._search_40, q, top_k) for q in queries]
+
+            # Collect and merge results
+            results_302 = []
+            for f in futures_302:
+                results_302 = self._merge(results_302, f.result(), top_k)
+
+            results_40 = []
+            for f in futures_40:
+                results_40 = self._merge(results_40, f.result(), top_k)
         else:
             nq = NormalizedQuery(original=food_description, cleaned=food_description)
-            results_302 = self._text_search(
-                food_description, self.catalog_302, self._word_index_302, top_k
-            )
-            results_40 = self._text_search(
-                food_description, self.catalog_40, self._word_index_40, top_k
-            )
+            # Run both catalogs in parallel
+            f302 = self._pool.submit(self._search_302, food_description, top_k)
+            f40 = self._pool.submit(self._search_40, food_description, top_k)
+            results_302 = f302.result()
+            results_40 = f40.result()
 
         return {
             "query": nq,

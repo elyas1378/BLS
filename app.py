@@ -454,6 +454,7 @@ def render_result_card(query_text, nq, result, flag, src302, src40,
 def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     from modules.normalizer import normalize
     from modules.concept_expansions import CONCEPT_EXPANSION
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     nq = normalize(query)
     all_302, all_40 = {}, {}
@@ -464,6 +465,23 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             code, score = cd["code"], cd["score"] * penalty
             if code not in target or score > (target[code].to_dict() if hasattr(target[code], "to_dict") else target[code])["score"]:
                 target[code] = c
+
+    def _batch_search_and_merge(terms_with_weights, tk=5):
+        """Run multiple text_ret.search() calls in parallel, return list of (result, weight)."""
+        if not terms_with_weights:
+            return []
+        futures = {}
+        for term, weight in terms_with_weights:
+            f = text_ret._pool.submit(text_ret.search, term, tk)
+            futures[f] = (term, weight)
+        results = []
+        for f in as_completed(futures):
+            term, weight = futures[f]
+            try:
+                results.append((f.result(), weight, term))
+            except Exception:
+                results.append((None, weight, term))
+        return results
 
     # Strip noise words/phrases that add no search value
     # Multi-word phrases first (order matters)
@@ -549,17 +567,15 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     modifier_40_codes = set()
     if modifier_phrases:
         mod_parts = re.split(r'\s*[,;]\s*|\s+und\s+', modifier_phrases)
-        for part in [p.strip() for p in mod_parts[:4] if len(p.strip()) >= 3]:
-            try:
-                r = text_ret.search(part, top_k=5)
+        mod_batch = [(p.strip(), 0.5) for p in mod_parts[:4] if len(p.strip()) >= 3]
+        for r, weight, _term in _batch_search_and_merge(mod_batch, tk=5):
+            if r is not None:
                 for c in r.get("bls302", []):
                     modifier_302_codes.add((c.to_dict() if hasattr(c, "to_dict") else c)["code"])
                 for c in r.get("bls40", []):
                     modifier_40_codes.add((c.to_dict() if hasattr(c, "to_dict") else c)["code"])
-                merge(all_302, r.get("bls302", []), 0.5)
-                merge(all_40, r.get("bls40", []), 0.5)
-            except Exception:
-                pass
+                merge(all_302, r.get("bls302", []), weight)
+                merge(all_40, r.get("bls40", []), weight)
 
     # ── Merge Haiku + Gemini pre-retrieval search terms ──
     gemini_search_terms = []
@@ -588,14 +604,14 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     _term_hits = {}  # term → bool
     if merged_terms:
         print(f"  Haiku: {len(haiku_search_terms)} terms, Gemini: {len(gemini_search_terms)} terms, Merged: {len(merged_terms)} unique terms")
-        for term in merged_terms:
-            try:
-                r = text_ret.search(term, top_k=5)
+        batch = [(term, 0.95) for term in merged_terms]
+        for r, weight, term in _batch_search_and_merge(batch, tk=5):
+            if r is not None:
                 found = bool(r.get("bls302") or r.get("bls40"))
                 _term_hits[term] = found
-                merge(all_302, r.get("bls302", []), 0.95)
-                merge(all_40, r.get("bls40", []), 0.95)
-            except Exception:
+                merge(all_302, r.get("bls302", []), weight)
+                merge(all_40, r.get("bls40", []), weight)
+            else:
                 _term_hits[term] = False
 
     # ── Vocab-based compound fallback for unknown long tokens ──
@@ -661,18 +677,18 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             return None
 
         query_tokens = re.findall(r'\w+', corrected_query.lower())
+        _compound_batch = []
         for token in query_tokens:
             if len(token) >= 6 and token not in _vset and " " not in token:
                 split_result = _vocab_compound_split(token)
                 if split_result:
                     for comp, quality in split_result:
                         weight = 0.40 if quality == 2 else 0.25
-                        try:
-                            r = text_ret.search(comp, top_k=10)
-                            merge(all_302, r.get("bls302", []), weight)
-                            merge(all_40, r.get("bls40", []), weight)
-                        except Exception:
-                            pass
+                        _compound_batch.append((comp, weight))
+        for r, weight, _term in _batch_search_and_merge(_compound_batch, tk=10):
+            if r is not None:
+                merge(all_302, r.get("bls302", []), weight)
+                merge(all_40, r.get("bls40", []), weight)
 
     # Concept expansion — match triggers against multiple forms of the query
     def _trigger_matches(trigger, text):
@@ -695,27 +711,25 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
         return False
 
     query_lower = query_clean.lower().strip()
+    # Collect all concept expansion + comma-split terms, then search in parallel
+    _expansion_batch = []
     for trigger, expansions in CONCEPT_EXPANSION.items():
         if not _trigger_matches(trigger, query_lower):
             continue
         for exp in expansions[:5]:
-            try:
-                r = text_ret.search(exp, top_k=5)
-                merge(all_302, r.get("bls302", []), 0.9)
-                merge(all_40, r.get("bls40", []), 0.9)
-            except Exception:
-                pass
+            _expansion_batch.append((exp, 0.9))
 
     # Multi-ingredient sub-query split (comma/semicolon only — connectors already handled above)
     comma_parts = re.split(r'\s*[,;]\s*', query_clean)
     if len(comma_parts) > 1:
         for part in [p.strip() for p in comma_parts[:4] if len(p.strip()) >= 3]:
-            try:
-                r = text_ret.search(part, top_k=5)
-                merge(all_302, r.get("bls302", []), 0.85)
-                merge(all_40, r.get("bls40", []), 0.85)
-            except Exception:
-                pass
+            _expansion_batch.append((part, 0.85))
+
+    # Run all concept + comma-split searches in parallel
+    for r, weight, _term in _batch_search_and_merge(_expansion_batch, tk=5):
+        if r is not None:
+            merge(all_302, r.get("bls302", []), weight)
+            merge(all_40, r.get("bls40", []), weight)
 
     # ── Claude query expansion (only when retriever is struggling AND pre-retrieval didn't run) ──
     _old_expansion_ran = False
@@ -728,16 +742,16 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
             expansion_terms = expander.expand(query)
             _old_expansion_ran = True
             haiku_search_terms.extend(expansion_terms)  # track for expansion details
-            for term in expansion_terms:
-                try:
-                    r = text_ret.search(term, top_k=5)
+            exp_batch = [(term, 0.95) for term in expansion_terms]
+            for r, weight, term in _batch_search_and_merge(exp_batch, tk=5):
+                if r is not None:
                     found = bool(r.get("bls302") or r.get("bls40"))
                     _term_hits[term] = found
                     if best_302 < 1.5:
-                        merge(all_302, r.get("bls302", []), 0.95)
+                        merge(all_302, r.get("bls302", []), weight)
                     if best_40 < 1.5:
-                        merge(all_40, r.get("bls40", []), 0.95)
-                except Exception:
+                        merge(all_40, r.get("bls40", []), weight)
+                else:
                     _term_hits[term] = False
 
     # ── Late-stage Haiku rescue ──
@@ -785,14 +799,14 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
                 late_terms = expander.expand(query)
                 if late_terms:
                     haiku_search_terms.extend(late_terms)  # track for expansion details
-                    for term in late_terms:
-                        try:
-                            r = text_ret.search(term, top_k=10)
+                    late_batch = [(term, 0.95) for term in late_terms]
+                    for r, weight, term in _batch_search_and_merge(late_batch, tk=10):
+                        if r is not None:
                             found = bool(r.get("bls302") or r.get("bls40"))
                             _term_hits[term] = found
-                            merge(all_302, r.get("bls302", []), 0.95)
-                            merge(all_40, r.get("bls40", []), 0.95)
-                        except Exception:
+                            merge(all_302, r.get("bls302", []), weight)
+                            merge(all_40, r.get("bls40", []), weight)
+                        else:
                             _term_hits[term] = False
             except Exception:
                 pass
