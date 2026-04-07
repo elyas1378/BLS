@@ -504,6 +504,13 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     haiku_search_terms = []
     pre_retrieval_haiku_ran = False
 
+    # Fire Gemini expansion in parallel with Haiku (collected later)
+    _gemini_future = None
+    if expander is not None:
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+        _gemini_executor = ThreadPoolExecutor(max_workers=1)
+        _gemini_future = _gemini_executor.submit(expander.expand_gemini, query)
+
     if any_unknown and expander is not None:
         unknown_tokens = [t for t in corrected_query.split()
                          if t.lower() not in get_vocab_set()
@@ -561,8 +568,16 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
 
     # ── Merge Haiku + Gemini pre-retrieval search terms ──
     gemini_search_terms = []
-    if expander is not None:
-        gemini_search_terms = expander.expand_gemini(query)
+    if _gemini_future is not None:
+        try:
+            gemini_search_terms = _gemini_future.result(timeout=3)
+        except (FuturesTimeout, TimeoutError):
+            print(f"  ⚠ Gemini timed out (>3s) for '{query[:40]}' — using Haiku only")
+            _gemini_future.cancel()
+            gemini_search_terms = []
+        except Exception as e:
+            print(f"  ⚠ Gemini failed for '{query[:40]}': {type(e).__name__} — using Haiku only")
+            gemini_search_terms = []
 
     # Merge and deduplicate
     haiku_set = set(t.lower().strip() for t in haiku_search_terms)
