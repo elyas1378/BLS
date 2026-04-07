@@ -25,8 +25,6 @@ import sys
 from pathlib import Path
 from difflib import SequenceMatcher
 from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor
-
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -231,9 +229,6 @@ class TextMatchRetriever:
         # Build sorted prefix index for O(log n) prefix matching
         self._prefix_keys_302 = sorted(self._word_index_302.keys())
         self._prefix_keys_40 = sorted(self._word_index_40.keys())
-
-        # Thread pool for parallel catalog searches
-        self._pool = ThreadPoolExecutor(max_workers=4)
 
         if verbose:
             print(f"  Ready ✓")
@@ -610,25 +605,17 @@ class TextMatchRetriever:
                 queries.append(nq.cleaned)
             queries.extend(nq.search_variants)
 
-            # Fire all searches in parallel (both catalogs × all variants)
-            futures_302 = [self._pool.submit(self._search_302, q, top_k) for q in queries]
-            futures_40 = [self._pool.submit(self._search_40, q, top_k) for q in queries]
-
-            # Collect and merge results
+            # Search all variants sequentially against both catalogs
+            # (outer parallelism is handled by _search_pool in app.py)
             results_302 = []
-            for f in futures_302:
-                results_302 = self._merge(results_302, f.result(), top_k)
-
             results_40 = []
-            for f in futures_40:
-                results_40 = self._merge(results_40, f.result(), top_k)
+            for q in queries:
+                results_302 = self._merge(results_302, self._search_302(q, top_k), top_k)
+                results_40 = self._merge(results_40, self._search_40(q, top_k), top_k)
         else:
             nq = NormalizedQuery(original=food_description, cleaned=food_description)
-            # Run both catalogs in parallel
-            f302 = self._pool.submit(self._search_302, food_description, top_k)
-            f40 = self._pool.submit(self._search_40, food_description, top_k)
-            results_302 = f302.result()
-            results_40 = f40.result()
+            results_302 = self._search_302(food_description, top_k)
+            results_40 = self._search_40(food_description, top_k)
 
         return {
             "query": nq,
