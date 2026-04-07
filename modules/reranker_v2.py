@@ -350,7 +350,14 @@ class RerankerV2:
 
         parts.append(
             "\nPick the best 3 from EACH list above. "
-            "ONLY use codes from the corresponding list."
+            "ONLY use codes from the corresponding list.\n\n"
+            'IMPORTANT: Your response MUST use this exact JSON structure '
+            'with "bls302" and "bls40" as top-level keys:\n'
+            '{"bls302": {"matches": [{"rank": 1, "code": "...", "name": "...", '
+            '"confidence": 0.92, "reasoning": "..."}]}, '
+            '"bls40": {"matches": [{"rank": 1, "code": "...", "name": "...", '
+            '"confidence": 0.92, "reasoning": "..."}]}, '
+            '"nova_score": 1, "nova_reasoning": "..."}'
         )
         return "\n".join(parts)
 
@@ -409,6 +416,17 @@ class RerankerV2:
         bls40_data = parsed.get("bls40", {})
         matches_302_raw = bls302_data.get("matches", []) if isinstance(bls302_data, dict) else []
         matches_40_raw = bls40_data.get("matches", []) if isinstance(bls40_data, dict) else []
+
+        # Fallback: Sonnet returned old single-version format {"matches": [...]}
+        if not matches_302_raw and not matches_40_raw and "matches" in parsed:
+            print("  ⚠ Sonnet returned old format — splitting matches by code validation")
+            all_matches = parsed.get("matches", [])
+            for m in all_matches:
+                code = m.get("code", "")
+                if code in cand_codes_302:
+                    matches_302_raw.append(m)
+                elif code in cand_codes_40:
+                    matches_40_raw.append(m)
 
         return {
             "matches_302": _validate(matches_302_raw, self._valid_302, cand_codes_302),
