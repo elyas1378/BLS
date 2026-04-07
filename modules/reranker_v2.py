@@ -92,6 +92,17 @@ ONLY pick a specific preparation code if the description explicitly states it:
 - "Lachs, gebraten" → T410082 is correct (gebraten explicitly stated)
 - "Reis gekocht" → C352032 is correct (gekocht explicitly stated)
 
+## SPECIFIC VARIANT OVER GENERIC — ingredient/qualifier matching:
+When the food description includes specific ingredients, preparation methods, or qualifiers
+(e.g. "mit Mayo", "mit Sahne", "gebraten", "1,5% Fett"), ALWAYS prefer the BLS entry
+that matches those specifics over a generic "Standardrezeptur" or base code.
+A specific match at lower retriever score is better than a generic match at higher score.
+Only fall back to generic/Standardrezeptur codes when NO specific variant exists in the candidate list.
+Examples:
+- "Kartoffelsalat mit Mayo" → pick "Kartoffelsalat mit Salatmayonnaise", NOT "Kartoffelsalat (Standardrezeptur)"
+- "Joghurt mit Vanille" → pick "Joghurt Vanillegeschmack", NOT "Joghurt (Standardrezeptur)"
+- "Gulasch mit Rindfleisch" → pick "Rindergulasch", NOT "Gulasch (Standardrezeptur)"
+
 ## EVERY WORD MATTERS — modifier awareness:
 Every word in the input carries meaning. Pay close attention to:
 - Negations: "sin" (without), "ohne" (without) → do NOT pick the opposite (e.g. "sin carne" ≠ "con carne")
@@ -110,7 +121,7 @@ Interpret these as the FOOD PRODUCT they refer to, not the literal word meaning:
 - Composite dishes → X (vegetable-based) or Y (meat/fish-based) recipes
 - Fat% should match when specified
 - Avoid top-level category headers (codes like M000000, G000000)
-- Prefer entries with "Standardrezeptur" for recipe-type foods
+- Use "Standardrezeptur" entries ONLY when no specific variant matches the description
 - When fat% is mentioned (e.g., "3,5% Fett"), match the closest fat level
 
 ## Closest substitute when no exact match exists:
