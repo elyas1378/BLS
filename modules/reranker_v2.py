@@ -117,6 +117,12 @@ Interpret these as the FOOD PRODUCT they refer to, not the literal word meaning:
 - "Lindt Kugel" = chocolate praline (Praline/Konfekt), NOT Trüffel (mushroom)
 - "Kinder", "Duplo", "Hanuta", "Milka", "Snickers" = chocolate/candy products
 
+## Recipe preparation location (X/Y codes only):
+For BLS 3.02 recipe codes (groups X and Y), the 6th digit indicates preparation location:
+  1 or 4 = household, 2 or 5 = industrial kitchen, 3 or 6 = gastronomy.
+When the food description does NOT specify a preparation location, ALWAYS prefer
+the household code (6th digit = 1 or 4) over industrial or gastronomy variants.
+
 ## Other matching priorities:
 - Composite dishes → X (vegetable-based) or Y (meat/fish-based) recipes
 - Fat% should match when specified

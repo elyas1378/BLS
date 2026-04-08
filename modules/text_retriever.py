@@ -479,6 +479,14 @@ class TextMatchRetriever:
         if group in ("X", "Y") and "standardrezeptur" in name:
             score += 0.05
 
+        # ── Recipe categories (X/Y): prefer household preparation ──
+        # Position 6 (code[5]): 1/4=household, 2/5=industrial, 3/6=gastronomy
+        if group in ("X", "Y") and len(code) >= 6:
+            if code[5] in ("1", "4"):
+                score += 0.10
+            elif code[5] in ("2", "3", "5", "6"):
+                score -= 0.05
+
         # ── Avoid "Konfitüre" (jam) for raw fruit searches ──
         if "konfitüre" in name and "konfitüre" not in query:
             score -= 0.3
