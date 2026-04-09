@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -540,8 +541,10 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
 
     # Fire Gemini expansion in parallel with Haiku
     _gemini_future = None
+    _gemini_start = None
     if expander is not None:
         from concurrent.futures import TimeoutError as FuturesTimeout
+        _gemini_start = time.time()
         _gemini_future = _search_pool.submit(expander.expand_gemini, query)
 
     if any_unknown and expander is not None:
@@ -571,10 +574,14 @@ def get_boosted_candidates(text_ret, query, top_k=30, expander=None):
     gemini_search_terms = []
     _gemini_status = "ok"  # "ok", "timeout", "error"
     if _gemini_future is not None:
+        # Gemini gets 4s total wall time (fired before Haiku, so Haiku's ~3s
+        # runs in parallel — actual added wait is at most ~1s).
+        remaining = max(0, 4.0 - (time.time() - _gemini_start))
         try:
-            gemini_search_terms = _gemini_future.result(timeout=3)
+            gemini_search_terms = _gemini_future.result(timeout=remaining or 0.001)
         except (FuturesTimeout, TimeoutError):
-            print(f"  ⚠ Gemini timed out (>3s) for '{query[:40]}' — using Haiku only")
+            elapsed = time.time() - _gemini_start
+            print(f"  ⚠ Gemini timed out ({elapsed:.1f}s/4s budget) for '{query[:40]}' — using Haiku only")
             _gemini_future.cancel()
             _gemini_status = "timeout"
         except Exception as e:
@@ -1322,7 +1329,7 @@ if query:
                     st.markdown(f"- {hit} {t}")
             with ec2:
                 if g_status == "timeout":
-                    st.markdown("**Gemini** — timed out (>3s)")
+                    st.markdown("**Gemini** — timed out (4s budget)")
                 elif g_status == "error":
                     st.markdown("**Gemini** — failed")
                 elif not g_terms:
