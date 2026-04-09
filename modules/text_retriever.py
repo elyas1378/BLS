@@ -43,20 +43,25 @@ _MORPHEMES = sorted([
     "aufstrich", "füllung", "stampf", "püree", "salat", "mousse", "creme",
     "curry", "wickel", "auflauf", "pfanne", "bowl", "crunch", "riegel",
     "eintopf", "gulasch", "lasagne", "gratin", "pesto", "dressing",
-    "aufschnitt", "pastete", "knödel", "kloß", "nockerl", "strudel",
+    "aufschnitt", "pastete", "knödel", "kloß", "klöße", "nockerl", "strudel",
     "fladen", "tortilla", "wrap", "burger", "nuggets", "schnitzel",
     "frikadelle", "bulette", "rösti", "pommes", "chips", "cracker",
     "müsli", "porridge", "smoothie", "shake", "joghurt", "quark",
     "pudding", "eis", "torte", "praline", "bonbon", "dragee",
     "konfitüre", "marmelade", "gelee", "kompott", "mus",
     "teig", "sauerteig", "blätterteig", "hefeteig", "mürbeteig",
+    "pfannkuchen", "plätzchen", "gebäck", "keks", "kekse",
+    "knäckebrot", "toastbrot", "mischbrot",
+    "kroketten", "taschen", "speise", "brei", "einlage",
     # Liquids
     "saft", "schorle", "milch", "drink", "tee", "kaffee", "wasser",
-    "sirup", "brühe", "fond",
+    "sirup", "brühe", "fond", "likör", "wein", "bier",
     # Ingredients / processing
     "mehl", "flocken", "samen", "schalen", "pulver", "extrakt",
     "öl", "fett", "butter", "schmalz", "essig",
     "zucker", "honig", "salz", "senf", "ketchup",
+    "sauce", "marinade", "mark",
+    "mischung", "zubereitung", "produkt", "geschmack",
     # Grains
     "hafer", "roggen", "weizen", "dinkel", "gerste", "hirse",
     "buchweizen", "amaranth", "quinoa", "mais", "reis",
@@ -69,6 +74,7 @@ _MORPHEMES = sorted([
     "champignon", "pilz", "erbsen", "bohnen", "linsen",
     "zucchini", "aubergine", "radieschen",
     "kümmel", "schwarzkümmel", "maronen", "kastanien", "pastinake",
+    "kohl", "schoten", "wurzel", "kern",
     # Fruits
     "apfel", "birne", "kirsche", "pflaume", "zwetschge", "beeren",
     "beere", "erdbeere", "himbeere", "heidelbeere", "johannisbeere",
@@ -82,7 +88,7 @@ _MORPHEMES = sorted([
     "schinken", "käse", "fleisch", "hack", "wurst", "speck",
     "lachs", "thunfisch", "hering", "forelle", "garnele",
     "hähnchen", "pute", "rind", "schwein", "kalb", "lamm",
-    "ei", "eier",
+    "ei", "eier", "barsch", "filet", "bauch",
     # Dairy
     "sahne", "schmand", "frischkäse", "mozzarella", "parmesan",
     "gouda", "emmentaler", "camembert", "feta",
@@ -162,14 +168,17 @@ def _split_no_hyphen(word: str) -> list[str]:
             if word[pos:].startswith(morph):
                 parts.append(morph)
                 pos += len(morph)
-                # Skip linking letters (common: 's', 'n', 'en')
-                if pos < len(word) and word[pos] in ('s', 'n') and pos + 1 < len(word):
-                    # Check if skipping this letter leads to another morpheme match
-                    skip = 1
-                    if word[pos:pos+2] == 'en':
-                        skip = 2
-                    remaining = word[pos+skip:]
-                    if any(remaining.startswith(m) for m in _MORPHEMES):
+                # Skip linking letters (common: s, n, en, e, er, es)
+                if pos < len(word) and pos + 1 < len(word):
+                    tail = word[pos:]
+                    skip = 0
+                    for link in ('en', 'er', 'es', 's', 'n', 'e'):
+                        if tail.startswith(link) and pos + len(link) < len(word):
+                            remaining = word[pos + len(link):]
+                            if any(remaining.startswith(m) for m in _MORPHEMES):
+                                skip = len(link)
+                                break
+                    if skip:
                         pos += skip
                 matched = True
                 break
