@@ -91,6 +91,15 @@ def spell_check_tokens(tokens: list[str]) -> tuple[list[str], list[str], bool]:
             corrected.append(t)
             continue
 
+        # Valid compound word — skip spell-check (not a typo)
+        # Only skip if ALL parts are recognized morphemes or vocab words
+        from modules.text_retriever import split_compound, _MORPHEMES
+        _morph_set = set(_MORPHEMES)
+        parts = split_compound(t)
+        if len(parts) >= 2 and all(p in _morph_set or p in vocab_set for p in parts):
+            corrected.append(t)
+            continue
+
         # Try difflib close match
         matches = get_close_matches(t, vocab_list, n=1, cutoff=0.82)
         if matches:
