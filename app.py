@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from modules.food_group_classifier import classify
 from modules.nova_classifier import classify_nova, needs_claude_nova
+from modules.upf_classifier import classify_upf
 
 
 def resolve_nova(code, bls_version, food_desc, brand, claude_nova=None, used_claude=False):
@@ -199,6 +200,13 @@ st.markdown("""
     .rc-nova-2 { background: #fffde8; color: #8a7a24; }
     .rc-nova-3 { background: #fff4e8; color: #9a6700; }
     .rc-nova-4 { background: #fff0f0; color: #ff3b30; }
+
+    .rc-upf {
+        font-size: 11px; padding: 4px 10px; border-radius: 8px; font-weight: 500;
+    }
+    .rc-upf-yes { background: #fff0f0; color: #ff3b30; }
+    .rc-upf-no { background: #e8f8e8; color: #248a24; }
+    .rc-upf-unknown { background: #f0f0f0; color: #8e8e93; }
 
     .rc-foodgroup {
         font-size: 11px; padding: 4px 10px; border-radius: 8px;
@@ -408,6 +416,16 @@ def render_result_card(query_text, nq, result, flag, src302, src40,
         nova, _ = resolve_nova(m302[0].code, "302", query_text, nq.brand, claude_nova, used_claude)
     nova_cls = f"rc-nova-{nova}" if nova else ""
     nova_html = f'<span class="rc-nova {nova_cls}">NOVA {nova}</span>' if nova else ""
+
+    # UPF badge (Freiburger framework — independent from NOVA)
+    upf_flag = classify_upf(query_text)
+    if upf_flag is True:
+        upf_html = '<span class="rc-upf rc-upf-yes">UPF (NOVA 4)</span>'
+    elif upf_flag is False:
+        upf_html = '<span class="rc-upf rc-upf-no">nicht UPF</span>'
+    else:
+        upf_html = '<span class="rc-upf rc-upf-unknown">UPF unklar</span>'
+
     fg_raw = (cls.get("main_group") or "").replace("_", " ")
     fg = re.sub(r'^\d+\s*', '', fg_raw)  # strip leading "11 " etc.
     fg_html = f'<span class="rc-foodgroup">{fg}</span>' if fg and fg != "—" else ""
@@ -443,7 +461,7 @@ def render_result_card(query_text, nq, result, flag, src302, src40,
         f'<div class="rc-food-name">{query_text}</div>'
         f'<div class="rc-food-meta">{nq.cleaned}{meta_badge}{brand_badge}</div>'
         f'</div>'
-        f'<div class="rc-header-right">{nova_html}{fg_html}</div>'
+        f'<div class="rc-header-right">{nova_html}{upf_html}{fg_html}</div>'
         f'</div>'
         f'{warnings_html}'
         f'<div class="rc-grid">{col302_html}{col40_html}</div>'
