@@ -110,9 +110,9 @@ def _layer1_code_structure(bls_code: str) -> dict:
 
     # Mixed / Recipe
     if letter == "X":
-        return _result(3, 0.45, "code_structure", "X = Veggie/carb recipes (mixed)")
+        return _result(3, 0.75, "code_structure", "X = Veggie/carb recipes (mixed)")
     if letter == "Y":
-        return _result(3, 0.40, "code_structure", "Y = Meat/fish recipes (mixed)")
+        return _result(3, 0.75, "code_structure", "Y = Meat/fish recipes (mixed)")
 
     return _result(None, 0.0, "code_structure", f"unknown letter '{letter}'")
 

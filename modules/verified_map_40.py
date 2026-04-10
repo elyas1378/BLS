@@ -658,4 +658,7 @@ VERIFIED_MAP_40 = {
     "osterbrot": "D4A6100",
     "pizza picante": "X914133",
     "gemüsecurry": "X870123",
+    "kartoffel-karotten-stampf": "X635253",
+    "kartoffel karotten stampf": "X635253",
+    "kartoffelkarottenstampf": "X635253",
 }
