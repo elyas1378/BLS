@@ -204,7 +204,7 @@ _NOVA1_APFEL_BLOCKED = {
 
 # "gurke" blocked in pickled
 _NOVA1_GURKE_BLOCKED = {
-    "gewürzgurke", "gewürzgurken",
+    "gewürzgurke", "gewürzgurken", "essiggurken", "essiggurke",
 }
 
 # "salat" as lettuce (NOVA 1) vs prepared salad
@@ -249,6 +249,7 @@ _NOVA2_MEHL_BLOCKED = {
 _NOVA2_OTHER = {
     "ahornsirup", "agavendicksaft",
     "speisestärke", "gelatine", "backpulver",
+    "balsamico",
 }
 
 # "hefe" blocked — "hefe" in ingredient lists shouldn't trigger NOVA 2
@@ -260,7 +261,7 @@ _NOVA2_HONIG_BLOCKED = {"honigmelone", "honigkuchen", "honig-senf"}
 # "essig" blocked in salad dressings
 _NOVA2_ESSIG_BLOCKED = {
     "essig-öl", "essig/öl", "essigmarinade", "essig-öldressing",
-    "essig-öl-dressing",
+    "essig-öl-dressing", "essiggurke", "essiggurken",
 }
 
 # "butter" needs compound protection
@@ -319,6 +320,9 @@ _NOVA4_TIEFKUEHL_BLOCKED = {
     "tiefkühlbeeren", "tiefkühlgemüse", "tiefkühlobst",
     "tk himbeeren", "tk beeren",
 }
+
+# "schorle" blocked for wine spritzers (NOVA 3, not 4)
+_NOVA4_SCHORLE_BLOCKED = {"weißweinschorle", "rotweinschorle", "weinschorle"}
 
 _NOVA4_PROCESSED_MEAT = {
     "wurst", "bratwurst", "bockwurst", "currywurst", "wiener",
@@ -385,6 +389,7 @@ _NOVA4_MISC = {
     "bratwürste",
     "ramen",
     "honig-senf-dressing",
+    "mayonnaise", "remoulade",
 }
 
 # -- Priority 5: NOVA 3 keywords --
@@ -442,6 +447,13 @@ def _layer2_description_override(layer1: dict, bls_code: str,
         if brand_lower not in _CLEAN_BRANDS:
             # Unknown brand — don't override, keep Layer 1
             pass
+
+    # ── Priority 1b: NOVA 1 overrides (any code letter) ──
+    _NOVA1_ANY_LETTER = {"kakaonibs", "ingwer"}
+    for kw in _NOVA1_ANY_LETTER:
+        if kw in lower:
+            return _result(1, 0.90, "description_override",
+                           f"keyword '{kw}' → NOVA 1 (any code)")
 
     # ── Priority 2: NOVA 1 keywords ──
     if letter in _NOVA1_LETTERS:
@@ -578,9 +590,12 @@ def _layer2_description_override(layer1: dict, bls_code: str,
     # ── Priority 4: NOVA 4 keywords ──
     for kw in _NOVA4_ULTRA_PROCESSED:
         if kw in lower:
-            if not any(blocked in lower for blocked in _NOVA4_TIEFKUEHL_BLOCKED) or "tiefkühl" not in kw:
-                return _result(4, 0.85, "description_override",
-                               f"keyword '{kw}' → NOVA 4 (ultra-processed)")
+            if ("tiefkühl" in kw and any(blocked in lower for blocked in _NOVA4_TIEFKUEHL_BLOCKED)):
+                continue
+            if ("schorle" in kw and any(blocked in lower for blocked in _NOVA4_SCHORLE_BLOCKED)):
+                continue
+            return _result(4, 0.85, "description_override",
+                           f"keyword '{kw}' → NOVA 4 (ultra-processed)")
 
     for kw in _NOVA4_PROCESSED_MEAT:
         if kw in lower:
