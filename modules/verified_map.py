@@ -28,7 +28,7 @@ VERIFIED_MAP_302 = {
     "nüsse": "H210100",
     "rapsöl": "Q180000",
     "leinsamen": "H410100",
-    "brot": "B201000",
+    "brot": "B251000",
     "kartoffeln": "K100022",
     "vollkornbrötchen": "B401000",
     "skyr": "M713100",
@@ -715,4 +715,5 @@ VERIFIED_MAP_302 = {
     "pizza picante": "X914133",
     "riesen": "S560800",
     "bowl mit gemüse, salat, feta, fleischersatz und öl-dressing": "X1A3000",
+    "gemüsecurry": "X880233",
 }

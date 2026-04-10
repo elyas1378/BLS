@@ -320,7 +320,7 @@ VERIFIED_MAP_40 = {
     "vollmilch 1,5 %": "M113200",
     "brokkoli, gekocht": "G312132",
     "brokkolisuppe": "X444613",
-    "brot": "B271000",
+    "brot": "B251000",
     "bruschetta (tomate, mozarella, knoblauch)": "X060160",
     "brötchen (sauerteig)": "B511000",
     "brötchen aufgebacken": "B511000",
@@ -578,7 +578,7 @@ VERIFIED_MAP_40 = {
     "canapés (baguettescheiben klein)": "B781300",
     "chiabattabrötchen": "B511000",
     "chicoree": "G101100",
-    "chili": "X469753",
+    "chili": "N110000",
     "ciabatta-brötchen": "B511000",
     "clementine mandarine": "F606100",
     "cola zero": "N331000",
@@ -657,4 +657,5 @@ VERIFIED_MAP_40 = {
     "lachs (im ofen gebacken)": "T410062",
     "osterbrot": "D4A6100",
     "pizza picante": "X914133",
+    "gemüsecurry": "X870123",
 }
