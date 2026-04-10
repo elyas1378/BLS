@@ -338,6 +338,9 @@ _NOVA4_SWEETS = {
     "kuchen", "torte",
 }
 
+# "kuchen" blocked for pfannkuchen/flammkuchen (NOVA 3, not 4)
+_NOVA4_KUCHEN_BLOCKED = {"pfannkuchen", "eierpfannkuchen", "flammkuchen"}
+
 # "waffel" blocked for maiswaffeln/linsenwaffeln
 _NOVA4_WAFFEL_BLOCKED = {"maiswaffeln", "maiswaffel", "linsenwaffeln", "linsenwaffel", "reiswaffel"}
 
@@ -449,11 +452,32 @@ def _layer2_description_override(layer1: dict, bls_code: str,
             pass
 
     # ── Priority 1b: NOVA 1 overrides (any code letter) ──
-    _NOVA1_ANY_LETTER = {"kakaonibs", "ingwer"}
+    _NOVA1_ANY_LETTER = {"kakaonibs", "ingwer", "bulgur", "champignons"}
     for kw in _NOVA1_ANY_LETTER:
         if kw in lower:
             return _result(1, 0.90, "description_override",
                            f"keyword '{kw}' → NOVA 1 (any code)")
+
+    # "bohnen" → NOVA 1 (any code), blocked for recipe compounds
+    _NOVA1_BOHNEN_BLOCKED = {
+        "bohnensalat", "bohneneintopf", "bohnensuppe", "bohnengemüse",
+        "bohnenpfanne", "bohnenragout",
+    }
+    if "bohnen" in lower or "bohne" in lower:
+        if not any(blocked in lower for blocked in _NOVA1_BOHNEN_BLOCKED):
+            return _result(1, 0.90, "description_override",
+                           "keyword 'bohnen' → NOVA 1 (any code)")
+
+    # "gemüse" → NOVA 1 (any code), blocked for dish compounds
+    _NOVA1_GEMUESE_BLOCKED = {
+        "gemüsesuppe", "gemüsecurry", "gemüsepfanne", "gemüseauflauf",
+        "gemüseeintopf", "gemüselasagne", "gemüseragout", "gemüsegratin",
+        "gemüseschnitzel", "gemüsebrühe", "gemüsebouillon",
+    }
+    if "gemüse" in lower:
+        if not any(blocked in lower for blocked in _NOVA1_GEMUESE_BLOCKED):
+            return _result(1, 0.90, "description_override",
+                           "keyword 'gemüse' → NOVA 1 (any code)")
 
     # ── Priority 2: NOVA 1 keywords ──
     if letter in _NOVA1_LETTERS:
@@ -604,6 +628,8 @@ def _layer2_description_override(layer1: dict, bls_code: str,
 
     for kw in _NOVA4_SWEETS:
         if kw in lower:
+            if "kuchen" in kw and any(blocked in lower for blocked in _NOVA4_KUCHEN_BLOCKED):
+                continue
             return _result(4, 0.85, "description_override",
                            f"keyword '{kw}' → NOVA 4 (sweets)")
 
