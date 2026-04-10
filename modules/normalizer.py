@@ -118,6 +118,8 @@ SYNONYM_MAP: dict[str, str] = {
     "salat":        "kopfsalat",
     "eisbergsalat": "eissalat",
     "rucola":       "rucola rauke",
+    "pak choi":     "pakchoy",
+    "pakchoi":      "pakchoy",
     "mais":         "mais zuckermais",
     "champignons":  "champignon zuchtpilz",
     "pilze":        "champignon zuchtpilz",
