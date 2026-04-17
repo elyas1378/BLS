@@ -157,8 +157,25 @@ def split_compound(word: str) -> list[str]:
     return [word_lower]
 
 
+# Post-split English → German translation for common food words that appear
+# inside German compounds (e.g., "butterchicken" → ["butter", "chicken"] → ["butter", "hähnchen"]).
+_COMPOUND_EN_DE = {
+    "chicken": "hähnchen",
+    "beef":    "rind",
+    "pork":    "schwein",
+    "fish":    "fisch",
+    "turkey":  "pute",
+    "lamb":    "lamm",
+}
+
+
 def _split_no_hyphen(word: str) -> list[str]:
-    """Try to split a non-hyphenated compound word using morpheme list."""
+    """Try to split a non-hyphenated compound word using morpheme list.
+
+    Greedy left-to-right. If no morpheme matches at the current position,
+    scan forward to find the next matching morpheme and treat the gap as
+    an unknown prefix part (handles ziegenfrischkäse, rhabarberschorle, etc.).
+    """
     parts = []
     pos = 0
     while pos < len(word):
@@ -182,15 +199,31 @@ def _split_no_hyphen(word: str) -> list[str]:
                         pos += skip
                 matched = True
                 break
+
         if not matched:
-            # No morpheme matched at this position — unsplittable remainder
-            remainder = word[pos:]
-            if remainder and len(remainder) >= 3:
-                parts.append(remainder)
-            pos = len(word)
+            # Scan forward: look for the next position where a morpheme matches.
+            next_pos = None
+            for scan in range(pos + 1, len(word)):
+                for morph in _MORPHEMES:
+                    if word[scan:].startswith(morph):
+                        next_pos = scan
+                        break
+                if next_pos is not None:
+                    break
+
+            if next_pos is not None and next_pos - pos >= 3:
+                parts.append(word[pos:next_pos])
+                pos = next_pos
+            else:
+                remainder = word[pos:]
+                if remainder and len(remainder) >= 3:
+                    parts.append(remainder)
+                pos = len(word)
 
     # Only return split if we got at least 2 meaningful parts
     if len(parts) >= 2 and all(len(p) >= 2 for p in parts):
+        # Translate English food words to German equivalents
+        parts = [_COMPOUND_EN_DE.get(p, p) for p in parts]
         return parts
     return [word]
 
@@ -242,13 +275,29 @@ class TextMatchRetriever:
         if verbose:
             print(f"  Ready ✓")
 
+    @staticmethod
+    def _expand_catalog_words(words):
+        """Add compound-split parts to each entry's word list so queries like
+        'hähnchen' match catalog entries like 'Hähnchenschenkel'."""
+        if not isinstance(words, list):
+            return words
+        expanded = set(words)
+        for w in words:
+            if len(w) >= 8:
+                parts = split_compound(w)
+                if len(parts) > 1:
+                    for p in parts:
+                        if len(p) >= 3:
+                            expanded.add(p)
+        return list(expanded)
+
     def _load_catalog(self, path, label, verbose):
         if not path.exists():
             raise FileNotFoundError(f"{label} catalog not found at {path}")
         df = pd.read_parquet(path)
         df["name_lower"] = df["name_de"].str.lower()
         # Pre-split words for fast matching
-        df["name_words"] = df["name_lower"].str.findall(r'\w+')
+        df["name_words"] = df["name_lower"].str.findall(r'\w+').apply(self._expand_catalog_words)
         if verbose:
             print(f"  Loaded {len(df):,} entries for {label}")
         return df
@@ -340,7 +389,10 @@ class TextMatchRetriever:
             if query_lower in name_lower:
                 score += 0.8
             elif name_lower in query_lower:
-                score += 0.6
+                # Only credit if the name is substantial relative to the query
+                # (guards against e.g. "Butter" lighting up for "butterchicken")
+                if len(name_lower) / max(len(query_lower), 1) >= 0.55:
+                    score += 0.6
 
             # Word overlap (original query words)
             name_words = set(row["name_words"]) if isinstance(row["name_words"], list) else set()
@@ -358,12 +410,15 @@ class TextMatchRetriever:
                     head_matched = bool(compound_heads & name_words)
                     mod_matched = bool(compound_mods & name_words)
                     if head_matched and mod_matched:
-                        score += 0.10   # both head + modifier = best match
-                    elif not head_matched and mod_matched:
-                        score -= 0.20   # only modifier, missed head = poor match
+                        score += 0.25   # both head + modifier = best match
+                    elif head_matched and not mod_matched:
+                        score += 0.10   # head only = preserves main ingredient
+                    elif mod_matched and not head_matched:
+                        score -= 0.40   # modifier matched but head missed = wrong dish class
                 else:
-                    # No compound overlap at all — check if only weak modifiers match
-                    pass
+                    # No compound overlap — penalize; a compound query matching
+                    # nothing at all in this entry is rarely the right answer
+                    score -= 0.10
 
             # Weak modifier penalty: if the ONLY reason this candidate appeared
             # is a generic descriptor word, penalize it

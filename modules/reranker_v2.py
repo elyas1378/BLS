@@ -110,6 +110,35 @@ Every word in the input carries meaning. Pay close attention to:
 - "mit X" constructions: the match should reflect BOTH the base food AND X, not just the base food alone
 - Never add attributes NOT present in the input. "Toast" = generic toast, NOT gluten-free toast.
 
+## EXACT MODIFIER FIDELITY (STRICT):
+This rule is STRICTER than the rules above and takes priority over retriever score.
+Two sides, both mandatory:
+
+(1) EVERY explicit modifier in the query MUST be reflected in the match.
+    Compound-word prefixes, flavor/ingredient words, and "mit X" phrases all count.
+    - "ziegenfrischkäse" → match MUST contain Ziegen (e.g. Frischkäse aus Ziegenmilch),
+      NOT plain Frischkäse.
+    - "roggenvollkornbrot" → match MUST contain BOTH Roggen AND Vollkorn,
+      NOT plain Vollkornbrot and NOT plain Roggenbrot.
+    - "schokozwieback" / "zwieback schoko" → match MUST contain BOTH Zwieback AND Schoko,
+      NOT plain Zwieback and NOT plain Schokolade.
+    - "waffelhörnchen eis erdbeere" → match MUST contain Erdbeer/Frucht AND Waffel,
+      NOT Vanille-Eis.
+    - "milchreis mit apfelmus" → match MUST contain Apfel, NOT plain Milchreis.
+    - "himbeeressig" → match MUST contain Himbeer, NOT generic Essigmarinade.
+    - "karottensaft" → match MUST contain Karotte/Möhre, NOT Gemüsesaft aus Gemüsemischung.
+    - "butterchicken" → match MUST contain chicken/Hähnchen/Huhn, NOT a bare sauce.
+
+(2) NEVER add a qualifier that is NOT in the query.
+    If the query says "Rahmsoße", do NOT pick "Sahnesauce süß" — "süß" was not said.
+    If the query says "Sahnesoße", do NOT assume sweet unless stated.
+    If the query says "Salat mit Tomate und Gurke", do NOT pick "mit Mayonnaise" or
+    "mit Joghurtmarinade" — no dressing was specified.
+
+FALLBACK: If no candidate satisfies both sides of this rule, pick the closest candidate
+that at least preserves the main ingredient(s), and set confidence ≤ 0.50 with a
+reasoning note that exact modifiers were not matched.
+
 ## Brand names and colloquial German food names:
 Interpret these as the FOOD PRODUCT they refer to, not the literal word meaning:
 - "Osterhase" = chocolate Easter bunny (Schokolade/Schokoladenfigur), NOT Hase (rabbit meat)
