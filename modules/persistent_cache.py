@@ -1,21 +1,14 @@
 """
 Persistent Cache (Google Sheets)
 ================================
-Three-tier caching for Sonnet re-ranking results:
-  - verified_cache: high-confidence results (≥0.85), served without re-ranking
-  - review_queue: medium-confidence results (0.60–0.84), served but flaggable
-  - Sheet1 (flags): flagged results — never serve from cache
-
-All data lives in a single Google Spreadsheet with 3 tabs.
-On init, loads all rows into memory for fast lookup.
-Writes go to Sheets immediately for durability.
+Three-tab logging for the BLS matcher:
+  - Sheet1 (flags): user-reported problem queries — never logged/promoted
+  - log: every search ever — one row per search (with session_id)
+  - review_queue: queries searched REVIEW_THRESHOLD+ times without being flagged
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import os
 from datetime import datetime
 
 import gspread
@@ -26,25 +19,25 @@ import streamlit as st
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SPREADSHEET_ID = "1FvMb4GZi2T1g6EN4uLMew1RVS3ua0BUbPOPfRSiO8Hc"
 
-# Column order for cache sheets
-_COLUMNS = [
-    "query", "bls_version", "code", "name", "confidence",
-    "full_result_json", "prompt_hash", "timestamp",
+REVIEW_THRESHOLD = 3
+
+_LOG_COLUMNS = [
+    "session_id", "query",
+    "bls302_code", "bls302_name", "bls302_source", "bls302_conf",
+    "bls40_code", "bls40_name", "bls40_source", "bls40_conf",
+    "timestamp",
 ]
 
-
-def _prompt_hash() -> str:
-    """Compute short hash of current Sonnet system prompt."""
-    try:
-        from modules.reranker_v2 import SYSTEM_PROMPT
-        return hashlib.md5(SYSTEM_PROMPT.encode()).hexdigest()[:8]
-    except Exception:
-        return "unknown"
+_REVIEW_COLUMNS = [
+    "query",
+    "bls302_code", "bls302_name",
+    "bls40_code", "bls40_name",
+    "hit_count", "first_seen", "last_seen",
+]
 
 
 @st.cache_resource
 def _get_gspread_client():
-    """Cached gspread client — shared across all PersistentCache instances."""
     creds = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"], scopes=SCOPES
     )
@@ -53,24 +46,22 @@ def _get_gspread_client():
 
 class PersistentCache:
     def __init__(self):
-        self._verified: dict[str, dict] = {}   # "query|version" → row dict
-        self._review: dict[str, dict] = {}      # "query|version" → row dict
         self._flagged_queries: set[str] = set()
-        self._verified_sheet = None
+        self._log_counts: dict[str, int] = {}
+        self._review_queries: set[str] = set()
+        self._log_sheet = None
         self._review_sheet = None
         self._flags_sheet = None
-        self._prompt_hash = _prompt_hash()
         self._loaded = False
 
     def _connect(self):
-        """Connect to sheets and load all data into memory."""
         if self._loaded:
             return
         try:
             client = _get_gspread_client()
             spreadsheet = client.open_by_key(SPREADSHEET_ID)
             self._flags_sheet = spreadsheet.worksheet("Sheet1")
-            self._verified_sheet = spreadsheet.worksheet("verified_cache")
+            self._log_sheet = spreadsheet.worksheet("log")
             self._review_sheet = spreadsheet.worksheet("review_queue")
             self._load_all()
             self._loaded = True
@@ -78,205 +69,114 @@ class PersistentCache:
             print(f"PersistentCache connect error: {e}")
 
     def _load_all(self):
-        """Batch-load all rows from both cache sheets + flags into memory."""
-        # Load verified cache
-        try:
-            rows = self._verified_sheet.get_all_records()
-            for row in rows:
-                key = self._key(row.get("query", ""), row.get("bls_version", ""))
-                self._verified[key] = row
-        except Exception as e:
-            print(f"PersistentCache load verified error: {e}")
-
-        # Load review queue
-        try:
-            rows = self._review_sheet.get_all_records()
-            for row in rows:
-                key = self._key(row.get("query", ""), row.get("bls_version", ""))
-                self._review[key] = row
-        except Exception as e:
-            print(f"PersistentCache load review error: {e}")
-
-        # Load flagged queries
         try:
             rows = self._flags_sheet.get_all_records()
             for row in rows:
-                food = row.get("food", "").strip().lower()
+                food = str(row.get("food", "")).strip().lower()
                 if food:
                     self._flagged_queries.add(food)
         except Exception as e:
             print(f"PersistentCache load flags error: {e}")
 
-    @staticmethod
-    def _key(query: str, bls_version: str) -> str:
-        return f"{query.strip().lower()}|{bls_version.strip()}"
+        try:
+            rows = self._log_sheet.get_all_records()
+            for row in rows:
+                q = str(row.get("query", "")).strip().lower()
+                if q:
+                    self._log_counts[q] = self._log_counts.get(q, 0) + 1
+        except Exception as e:
+            print(f"PersistentCache load log error: {e}")
 
-    @property
-    def prompt_version(self) -> str:
-        return self._prompt_hash
+        try:
+            rows = self._review_sheet.get_all_records()
+            for row in rows:
+                q = str(row.get("query", "")).strip().lower()
+                if q:
+                    self._review_queries.add(q)
+        except Exception as e:
+            print(f"PersistentCache load review error: {e}")
+
+    @staticmethod
+    def _norm(q: str) -> str:
+        return q.strip().lower()
 
     def is_flagged(self, query: str) -> bool:
-        """Check if this query has been flagged by a user."""
         self._connect()
-        return query.strip().lower() in self._flagged_queries
+        return self._norm(query) in self._flagged_queries
 
-    def lookup(self, query: str, bls_version: str) -> dict | None:
-        """Look up a cached result.
-
-        Returns dict with keys: code, name, confidence, full_result_json, status
-        status is "verified" or "unverified"
-        Returns None if not found.
-        """
-        self._connect()
-        key = self._key(query, bls_version)
-
-        # Never serve cached results for flagged queries
-        if self.is_flagged(query):
-            return None
-
-        # Tier 1: verified cache (always valid, prompt-independent)
-        if key in self._verified:
-            row = self._verified[key]
-            return {
-                "code": row.get("code", ""),
-                "name": row.get("name", ""),
-                "confidence": float(row.get("confidence", 0)),
-                "full_result_json": row.get("full_result_json", ""),
-                "status": "verified",
-            }
-
-        # Tier 2: review queue (valid only if prompt matches)
-        if key in self._review:
-            row = self._review[key]
-            if row.get("prompt_hash", "") == self._prompt_hash:
-                return {
-                    "code": row.get("code", ""),
-                    "name": row.get("name", ""),
-                    "confidence": float(row.get("confidence", 0)),
-                    "full_result_json": row.get("full_result_json", ""),
-                    "status": "unverified",
-                }
-            else:
-                # Stale — delete from sheet and memory
-                self._delete_from_sheet(self._review_sheet, query, bls_version)
-                del self._review[key]
-                return None
-
-        return None
-
-    def store(self, query: str, bls_version: str, result: dict,
-              confidence: float):
-        """Store a re-ranking result in the appropriate tier.
-
-        result should have keys: code, name, confidence, full_result_json
-        """
+    def log_search(
+        self,
+        session_id: str,
+        query: str,
+        bls302_code: str = "",
+        bls302_name: str = "",
+        bls302_source: str = "",
+        bls302_conf: float = 0.0,
+        bls40_code: str = "",
+        bls40_name: str = "",
+        bls40_source: str = "",
+        bls40_conf: float = 0.0,
+    ):
+        """Log one search, then promote to review_queue at REVIEW_THRESHOLD hits."""
         self._connect()
 
-        # Don't cache flagged queries
-        if self.is_flagged(query):
+        q_norm = self._norm(query)
+        if not q_norm or q_norm in self._flagged_queries:
             return
 
-        # Don't cache low-confidence results
-        if confidence < 0.60:
-            return
+        now = datetime.now().isoformat()
 
-        key = self._key(query, bls_version)
-        row_data = {
-            "query": query.strip().lower(),
-            "bls_version": bls_version,
-            "code": result.get("code", ""),
-            "name": result.get("name", ""),
-            "confidence": round(confidence, 3),
-            "full_result_json": result.get("full_result_json", ""),
-            "prompt_hash": self._prompt_hash,
-            "timestamp": datetime.now().isoformat(),
+        log_row = {
+            "session_id": session_id,
+            "query": q_norm,
+            "bls302_code": bls302_code,
+            "bls302_name": bls302_name,
+            "bls302_source": bls302_source,
+            "bls302_conf": round(float(bls302_conf or 0), 3),
+            "bls40_code": bls40_code,
+            "bls40_name": bls40_name,
+            "bls40_source": bls40_source,
+            "bls40_conf": round(float(bls40_conf or 0), 3),
+            "timestamp": now,
         }
-        row_list = [row_data.get(c, "") for c in _COLUMNS]
+        log_list = [log_row.get(c, "") for c in _LOG_COLUMNS]
 
         try:
-            if confidence >= 0.85:
-                # Write to verified_cache
-                self._ensure_headers(self._verified_sheet)
-                self._verified_sheet.append_row(row_list, value_input_option="RAW")
-                self._verified[key] = row_data
-            else:
-                # Write to review_queue (0.60–0.84)
-                self._ensure_headers(self._review_sheet)
-                self._review_sheet.append_row(row_list, value_input_option="RAW")
-                self._review[key] = row_data
+            self._ensure_headers(self._log_sheet, _LOG_COLUMNS)
+            self._log_sheet.append_row(log_list, value_input_option="RAW")
         except Exception as e:
-            print(f"PersistentCache store error: {e}")
+            print(f"PersistentCache log error: {e}")
+            return
 
-    def confirm(self, query: str, bls_version: str) -> bool:
-        """Move a result from review_queue to verified_cache."""
-        self._connect()
-        key = self._key(query, bls_version)
+        count = self._log_counts.get(q_norm, 0) + 1
+        self._log_counts[q_norm] = count
 
-        if key not in self._review:
-            return False
+        if count >= REVIEW_THRESHOLD and q_norm not in self._review_queries:
+            review_row = {
+                "query": q_norm,
+                "bls302_code": bls302_code,
+                "bls302_name": bls302_name,
+                "bls40_code": bls40_code,
+                "bls40_name": bls40_name,
+                "hit_count": count,
+                "first_seen": now,
+                "last_seen": now,
+            }
+            review_list = [review_row.get(c, "") for c in _REVIEW_COLUMNS]
+            try:
+                self._ensure_headers(self._review_sheet, _REVIEW_COLUMNS)
+                self._review_sheet.append_row(review_list, value_input_option="RAW")
+                self._review_queries.add(q_norm)
+            except Exception as e:
+                print(f"PersistentCache promote error: {e}")
 
-        row_data = self._review[key].copy()
-        row_data["timestamp"] = datetime.now().isoformat()
-        row_list = [row_data.get(c, "") for c in _COLUMNS]
-
-        try:
-            # Add to verified
-            self._ensure_headers(self._verified_sheet)
-            self._verified_sheet.append_row(row_list, value_input_option="RAW")
-            self._verified[key] = row_data
-
-            # Remove from review
-            self._delete_from_sheet(self._review_sheet, query, bls_version)
-            del self._review[key]
-            return True
-        except Exception as e:
-            print(f"PersistentCache confirm error: {e}")
-            return False
-
-    def reject(self, query: str, bls_version: str) -> bool:
-        """Delete a result from review_queue."""
-        self._connect()
-        key = self._key(query, bls_version)
-
-        if key not in self._review:
-            return False
-
-        try:
-            self._delete_from_sheet(self._review_sheet, query, bls_version)
-            del self._review[key]
-            return True
-        except Exception as e:
-            print(f"PersistentCache reject error: {e}")
-            return False
-
-    def _ensure_headers(self, sheet):
-        """Add header row if sheet is empty."""
+    def _ensure_headers(self, sheet, columns):
         try:
             existing = sheet.row_values(1)
             if not existing:
-                sheet.append_row(_COLUMNS, value_input_option="RAW")
+                sheet.append_row(columns, value_input_option="RAW")
         except Exception:
             try:
-                sheet.append_row(_COLUMNS, value_input_option="RAW")
+                sheet.append_row(columns, value_input_option="RAW")
             except Exception as e:
                 print(f"PersistentCache header error: {e}")
-
-    def _delete_from_sheet(self, sheet, query: str, bls_version: str):
-        """Delete matching row(s) from a sheet."""
-        try:
-            all_values = sheet.get_all_values()
-            q_lower = query.strip().lower()
-            # Find rows to delete (1-indexed, skip header)
-            rows_to_delete = []
-            for i, row in enumerate(all_values):
-                if i == 0:
-                    continue  # skip header
-                if (len(row) >= 2
-                        and row[0].strip().lower() == q_lower
-                        and row[1].strip() == bls_version):
-                    rows_to_delete.append(i + 1)  # gspread is 1-indexed
-            # Delete from bottom up to preserve indices
-            for row_idx in reversed(rows_to_delete):
-                sheet.delete_rows(row_idx)
-        except Exception as e:
-            print(f"PersistentCache delete error: {e}")

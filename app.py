@@ -300,10 +300,14 @@ def load_text_retriever():
     from modules.text_retriever import TextMatchRetriever
     return TextMatchRetriever(verbose=False)
 
+import uuid as _uuid
 for key, default in [("api_calls", 0), ("requery_food", None),
-                     ("unmatched_foods", []), ("flagged_this_session", set())]:
+                     ("unmatched_foods", []), ("flagged_this_session", set()),
+                     ("session_id", None)]:
     if key not in st.session_state:
         st.session_state[key] = default
+if st.session_state.session_id is None:
+    st.session_state.session_id = _uuid.uuid4().hex[:12]
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1022,56 +1026,9 @@ if query:
         # ── Resolve matches ──
         result = None
         result_from_claude = False
-        pcache_status_302 = None  # "verified" or "unverified" from persistent cache
-        pcache_status_40 = None
-
-        # ── Check persistent cache BEFORE calling Sonnet ──
         skip_cache = _force_requery
-        is_flagged = _pcache.is_flagged(query)
 
-        if use_claude and _api_key and not skip_cache and not is_flagged:
-            pc302 = _pcache.lookup(query, "BLS 3.02")
-            pc40 = _pcache.lookup(query, "BLS 4.0")
-
-            if pc302 or pc40:
-                from modules.reranker_v2 import RerankerResult, RankedMatch
-                result = RerankerResult(food_description=query)
-                result_from_claude = True
-
-                if pc302:
-                    pcache_status_302 = pc302["status"]
-                    result.bls302_matches = [RankedMatch(
-                        rank=1, code=pc302["code"], name=pc302["name"],
-                        confidence=pc302["confidence"],
-                        reasoning=f"Persistent cache ({pc302['status']})",
-                    )]
-                    result.bls302_source = "cached"
-                if pc40:
-                    pcache_status_40 = pc40["status"]
-                    result.bls40_matches = [RankedMatch(
-                        rank=1, code=pc40["code"], name=pc40["name"],
-                        confidence=pc40["confidence"],
-                        reasoning=f"Persistent cache ({pc40['status']})",
-                    )]
-                    result.bls40_source = "cached"
-
-                # If only one version was cached, still need API for the other
-                if not pc302 or not pc40:
-                    reranker = get_reranker(_api_key)
-                    if reranker:
-                        api_result = reranker.rerank(query, candidates)
-                        if not pc302 and api_result.bls302_matches:
-                            result.bls302_matches = api_result.bls302_matches
-                            result.bls302_source = api_result.bls302_source
-                        if not pc40 and api_result.bls40_matches:
-                            result.bls40_matches = api_result.bls40_matches
-                            result.bls40_source = api_result.bls40_source
-                        if api_result.claude_nova is not None:
-                            result.claude_nova = api_result.claude_nova
-                            result.claude_nova_reasoning = api_result.claude_nova_reasoning
-
-        # ── Standard path: call Sonnet if no persistent cache hit ──
-        if result is None and use_claude and _api_key:
+        if use_claude and _api_key:
             reranker = get_reranker(_api_key)
             if reranker:
                 if skip_cache:
@@ -1085,25 +1042,27 @@ if query:
                 st.session_state.api_calls += reranker.session_api_calls - old_calls
                 result_from_claude = True
 
-                # Store results in persistent cache
-                m302 = result.bls302_matches or []
-                m40 = result.bls40_matches or []
-                if m302 and result.bls302_source == "api":
-                    _pcache.store(query, "BLS 3.02", {
-                        "code": m302[0].code, "name": m302[0].name,
-                        "full_result_json": json.dumps([m.to_dict() for m in m302], ensure_ascii=False),
-                    }, m302[0].confidence)
-                if m40 and result.bls40_source == "api":
-                    _pcache.store(query, "BLS 4.0", {
-                        "code": m40[0].code, "name": m40[0].name,
-                        "full_result_json": json.dumps([m.to_dict() for m in m40], ensure_ascii=False),
-                    }, m40[0].confidence)
-
         if result is None or (result and result.error):
             if result and result.error:
                 st.error(f"API error: {result.error}")
             smart = get_smart_reranker()
             result = smart.rerank(query, candidates)
+
+        # ── Log every search (skipped for flagged queries, promoted at 3+ hits) ──
+        m302 = result.bls302_matches or []
+        m40 = result.bls40_matches or []
+        _pcache.log_search(
+            session_id=st.session_state.session_id,
+            query=query,
+            bls302_code=m302[0].code if m302 else "",
+            bls302_name=m302[0].name if m302 else "",
+            bls302_source=getattr(result, "bls302_source", ""),
+            bls302_conf=m302[0].confidence if m302 else 0.0,
+            bls40_code=m40[0].code if m40 else "",
+            bls40_name=m40[0].name if m40 else "",
+            bls40_source=getattr(result, "bls40_source", ""),
+            bls40_conf=m40[0].confidence if m40 else 0.0,
+        )
 
         # ── Save result to session state so reruns don't re-execute the pipeline ──
         st.session_state["_last_result"] = {
@@ -1111,8 +1070,6 @@ if query:
             "result_from_claude": result_from_claude,
             "nq": nq,
             "candidates": candidates,
-            "pcache_status_302": pcache_status_302,
-            "pcache_status_40": pcache_status_40,
         }
     else:
         # ── Reuse cached result from session state ──
@@ -1121,8 +1078,6 @@ if query:
         result_from_claude = _cached["result_from_claude"]
         nq = _cached["nq"]
         candidates = _cached["candidates"]
-        pcache_status_302 = _cached["pcache_status_302"]
-        pcache_status_40 = _cached["pcache_status_40"]
 
     # ── Extract Claude NOVA if available ──
     claude_nova = getattr(result, "claude_nova", None)
@@ -1133,14 +1088,8 @@ if query:
     # ── Source text ──
     src302 = getattr(result, "bls302_source", "")
     src40 = getattr(result, "bls40_source", "")
-    if pcache_status_302 == "verified":
-        source_text = "Verified (persistent cache)"
-    elif pcache_status_302 == "unverified":
-        source_text = "Unverified cache — please review"
-    elif src302 == "verified":
+    if src302 == "verified":
         source_text = "Verified lookup — no API cost"
-    elif src302 == "cached":
-        source_text = "Served from cache — no API cost"
     elif src302 == "api":
         source_text = "Re-ranked by Claude API"
     else:
@@ -1153,55 +1102,22 @@ if query:
                        source_text=source_text)
 
     # ── Action row (source + buttons, right-aligned) ──
-    can_requery = result_from_claude or src302 in ("cached", "verified", "api")
+    can_requery = result_from_claude or src302 in ("verified", "api")
     already_flagged = query in st.session_state.flagged_this_session
-    is_unverified = pcache_status_302 == "unverified" or pcache_status_40 == "unverified"
 
     with st.container():
         st.markdown('<div class="action-row">', unsafe_allow_html=True)
 
-        if is_unverified:
-            act_cols = st.columns([2.5, 1.2, 1.2, 1.2, 1.2])
-        else:
-            act_cols = st.columns([3, 1.5, 1.5])
+        act_cols = st.columns([3, 1.5, 1.5])
 
         # Column 0: source label
         with act_cols[0]:
-            if pcache_status_302 == "verified":
-                st.markdown('<span style="font-size:12px; color:#34c759;">✓ Verified</span>',
-                            unsafe_allow_html=True)
-            elif is_unverified:
-                st.markdown('<span style="font-size:12px; color:#f5a623;">⚠ Unverified — please review</span>',
-                            unsafe_allow_html=True)
-            else:
-                st.markdown(f'<span style="font-size:12px; color:#86868b;">{source_text}</span>',
-                            unsafe_allow_html=True)
+            st.markdown(f'<span style="font-size:12px; color:#86868b;">{source_text}</span>',
+                        unsafe_allow_html=True)
 
         btn_idx = 1
 
-        # Confirm/Reject for unverified persistent cache
-        if is_unverified:
-            with act_cols[btn_idx]:
-                if st.button("Confirm", key="confirm_btn", type="secondary"):
-                    if pcache_status_302 == "unverified":
-                        _pcache.confirm(query, "BLS 3.02")
-                    if pcache_status_40 == "unverified":
-                        _pcache.confirm(query, "BLS 4.0")
-                    # Force re-search so UI reflects new "verified" status
-                    st.session_state.pop("_last_result", None)
-                    st.rerun()
-            btn_idx += 1
-            with act_cols[btn_idx]:
-                if st.button("Reject", key="reject_btn", type="secondary"):
-                    if pcache_status_302 == "unverified":
-                        _pcache.reject(query, "BLS 3.02")
-                    if pcache_status_40 == "unverified":
-                        _pcache.reject(query, "BLS 4.0")
-                    st.session_state.requery_food = query
-                    st.rerun()
-            btn_idx += 1
-
-        # Re-query button (always available for cached/verified/API results)
+        # Re-query button (always available for verified/API results)
         with act_cols[btn_idx]:
             if can_requery:
                 if st.button("Re-query", key="requery_btn", type="secondary"):
