@@ -121,7 +121,7 @@ class PersistentCache:
         self._connect()
 
         q_norm = self._norm(query)
-        if not q_norm or q_norm in self._flagged_queries:
+        if not q_norm:
             return
 
         now = datetime.now().isoformat()
@@ -151,7 +151,10 @@ class PersistentCache:
         count = self._log_counts.get(q_norm, 0) + 1
         self._log_counts[q_norm] = count
 
-        if count >= REVIEW_THRESHOLD and q_norm not in self._review_queries:
+        # Promote to review_queue only if not flagged
+        if (count >= REVIEW_THRESHOLD
+                and q_norm not in self._review_queries
+                and q_norm not in self._flagged_queries):
             review_row = {
                 "query": q_norm,
                 "bls302_code": bls302_code,
