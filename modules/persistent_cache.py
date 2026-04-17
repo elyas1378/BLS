@@ -67,6 +67,10 @@ class PersistentCache:
             self._loaded = True
         except Exception as e:
             print(f"PersistentCache connect error: {e}")
+            try:
+                st.warning(f"Cache connect error: {type(e).__name__}: {e}")
+            except Exception:
+                pass
 
     def _load_all(self):
         try:
@@ -146,6 +150,10 @@ class PersistentCache:
             self._log_sheet.append_row(log_list, value_input_option="RAW")
         except Exception as e:
             print(f"PersistentCache log error: {e}")
+            try:
+                st.warning(f"Cache log write error: {type(e).__name__}: {e}")
+            except Exception:
+                pass
             return
 
         count = self._log_counts.get(q_norm, 0) + 1
