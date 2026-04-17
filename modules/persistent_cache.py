@@ -60,7 +60,7 @@ class PersistentCache:
         try:
             client = _get_gspread_client()
             spreadsheet = client.open_by_key(SPREADSHEET_ID)
-            self._flags_sheet = spreadsheet.worksheet("Sheet1")
+            self._flags_sheet = spreadsheet.worksheet("flags")
             self._log_sheet = spreadsheet.worksheet("log")
             self._review_sheet = spreadsheet.worksheet("review_queue")
             self._load_all()
