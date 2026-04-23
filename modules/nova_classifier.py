@@ -26,20 +26,99 @@ def needs_claude_nova(confidence: float) -> bool:
 # ═══════════════════════════════════════════════════════════
 
 def classify_nova(bls_code: str, bls_version: str = "302",
-                  food_description: str = "", brand: str | None = None) -> dict:
+                  food_description: str = "", brand: str | None = None,
+                  verify_with_llm: bool = True,
+                  cache=None) -> dict:
     """
     Classify a BLS code into NOVA (1–4).
-    Runs Layer 1 (code structure), then Layer 2 (description overrides).
+    Runs Freiburger override (Layer 0), Layer 1 (code structure), Layer 2
+    (description overrides), and a post-cap when Freiburger asserts "NOT_4".
+
+    Layer 3 (Claude verification) fires when verify_with_llm=True AND the
+    rule-based result is low-confidence. Freiburger hits (confidence 0.98)
+    and other high-confidence rule hits skip the LLM — no wasted calls.
+    Set verify_with_llm=False to force a purely offline classification.
+
+    ``cache`` is an optional PersistentCache instance; when provided, the
+    LLM call is skipped on cache hits. Cache writes happen via
+    ``cache.log_search(..., llm_nova=...)`` which the caller is expected
+    to invoke after classification.
 
     Returns:
         {"nova": int|None, "confidence": float, "method": str, "reason": str,
-         "needs_claude": bool}
+         "needs_claude": bool, "rule_nova": int|None,
+         "llm_agreed": bool (only if verified),
+         "llm_reason": str (only if verified),
+         "llm_source": "cache"|"llm" (only if verified)}
     """
+    # ── Layer 0: Freiburger Ernährungsprotokoll override ──
+    # Sidney & Leonie's standardization list (172 items) overrides everything
+    # below for exact name matches. "NOT_4" entries fall through and are handled
+    # by the cap at the end.
+    from modules.freiburger_nova import lookup_nova, is_not_nova4
+    freiburger_hit = lookup_nova(food_description)
+    if freiburger_hit is not None:
+        return {
+            "nova": freiburger_hit,
+            "confidence": 0.98,
+            "method": "freiburger_override",
+            "reason": "Freiburger Protokoll standardization list",
+            "needs_claude": False,
+        }
+
     layer1 = _layer1_code_structure(bls_code)
     result = _layer2_description_override(
         layer1, bls_code, food_description, brand
     )
+
+    # Cap at 3 when Freiburger explicitly asserts NOT_4
+    if result.get("nova") == 4 and is_not_nova4(food_description):
+        result["nova"] = 3
+        result["method"] = (result.get("method", "") + "+freiburger_cap").strip("+")
+        result["reason"] = (
+            (result.get("reason", "") or "") + "; capped to 3 (Freiburger NOT_4)"
+        ).lstrip("; ")
+        result["confidence"] = min(result.get("confidence", 0.8), 0.9)
+
     result["needs_claude"] = needs_claude_nova(result["confidence"])
+
+    # Preserve the rule-based guess even after LLM verification so the
+    # caller can log both (useful for auditing when Claude disagrees).
+    result["rule_nova"] = result.get("nova")
+
+    # ── Layer 3: LLM verification (only when the rule-based layers are
+    # uncertain). High-confidence rule hits and Freiburger overrides skip
+    # this — they don't need a second opinion and we don't pay for one.
+    if verify_with_llm and (result["needs_claude"] or result.get("nova") is None):
+        from modules.nova_llm_verifier import verify_nova
+
+        cache_lookup = cache.get_nova_cache if cache is not None else None
+
+        verdict = verify_nova(
+            code=bls_code,
+            description=food_description,
+            rule_based_nova=result.get("nova"),
+            rule_based_reason=result.get("reason", ""),
+            cache_lookup=cache_lookup,
+        )
+
+        if verdict is not None:
+            result["nova"] = verdict["nova"]
+            result["llm_agreed"] = verdict["agree"]
+            result["llm_reason"] = verdict["reason"]
+            result["llm_source"] = verdict["source"]
+            result["method"] = (
+                (result.get("method", "") or "") + "+llm_verify"
+            ).strip("+")
+            result["reason"] = (
+                (result.get("reason", "") or "")
+                + (f" | LLM: {verdict['reason']}" if verdict["reason"] else "")
+            ).strip(" |")
+            # Verified results get a confidence bump. Agreement is stronger
+            # signal than disagreement (where we're overriding our own rule).
+            result["confidence"] = 0.95 if verdict["agree"] else 0.85
+            result["needs_claude"] = False
+
     return result
 
 
@@ -307,8 +386,13 @@ _NOVA4_ULTRA_PROCESSED = {
     "cornflakes", "gummibärchen", "gummibär", "weingummi",
     "schokoriegel", "müsliriegel", "proteinriegel", "energieriegel",
     "eiweißpulver", "proteinpulver", "whey protein",
-    "smoothie", "schorle", "apfelsaft", "orangensaft", "traubensaft",
-    "cranberrysaft", "johannisbeerschorle",
+    # Schorle (Fruchtsaft-Schorle) stays NOVA 4; pure juices + smoothies moved
+    # to NOVA 3 per Sidney 2026-04-23 ("juice should be NOVA 3").
+    "schorle", "johannisbeerschorle",
+    # Nectars and mixed juice drinks per Sidney 2026-04-23 ("Fruchtsaftgetränke
+    # → NOVA 4; Nektar including Apfelnektar → NOVA 4").
+    "fruchtsaftgetränk", "fruchtsaftgetränke",
+    "nektar", "fruchtnektar", "apfelnektar", "orangennektar", "mehrfruchtnektar",
     "hafermilch", "haferdrink", "mandelmilch", "sojamilch", "sojadrink",
     "alpro", "kaffeeweißer",
     "cappuccino", "cappucchino", "milchkaffee", "eiskaffee",
@@ -416,6 +500,10 @@ _NOVA3_KEYWORDS = {
     "thunfisch im eigenen saft",
     "vollkornwrap", "weizenwrap", "wrap",
     "weißweinschorle",
+    # Pure fruit juices + smoothies (Sidney 2026-04-23: juice → NOVA 3)
+    "apfelsaft", "orangensaft", "traubensaft", "cranberrysaft",
+    "fruchtsaft", "mehrfruchtsaft", "multivitaminsaft",
+    "smoothie",
 }
 
 # "wein" blocked to avoid matching inside "schwein" words
@@ -478,6 +566,18 @@ def _layer2_description_override(layer1: dict, bls_code: str,
         if not any(blocked in lower for blocked in _NOVA1_GEMUESE_BLOCKED):
             return _result(1, 0.90, "description_override",
                            "keyword 'gemüse' → NOVA 1 (any code)")
+
+    # ── Priority 1c: NOVA 4 absolutes (win over NOVA 1 fruit keywords) ──
+    # Without this, "Apfelnektar" hits the "apfel" NOVA 1 rule before reaching
+    # the "nektar" NOVA 4 rule. These tokens are industrial products regardless
+    # of the fruit in the name (Sidney 2026-04-23).
+    _NOVA4_ABSOLUTE = (
+        "nektar", "fruchtsaftgetränk",
+    )
+    for kw in _NOVA4_ABSOLUTE:
+        if kw in lower:
+            return _result(4, 0.92, "description_override",
+                           f"keyword '{kw}' → NOVA 4 (absolute)")
 
     # ── Priority 2: NOVA 1 keywords ──
     if letter in _NOVA1_LETTERS:

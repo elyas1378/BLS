@@ -25,6 +25,9 @@ _LOG_COLUMNS = [
     "session_id", "query",
     "bls302_code", "bls302_name", "bls302_source", "bls302_conf",
     "bls40_code", "bls40_name", "bls40_source", "bls40_conf",
+    # NOVA verification (Layer 3). Empty on old rows / rows that didn't
+    # run verification. Used as a disk-free cache for Claude responses.
+    "rule_nova", "llm_nova", "llm_agreed", "llm_method", "llm_reason",
     "timestamp",
 ]
 
@@ -49,6 +52,10 @@ class PersistentCache:
         self._flagged_queries: set[str] = set()
         self._log_counts: dict[str, int] = {}
         self._review_queries: set[str] = set()
+        # NOVA cache: (bls_code_upper, normalized_query) -> latest verdict dict
+        # Populated from log rows that have llm_nova filled; updated whenever
+        # log_search() writes a new row with NOVA fields.
+        self._nova_cache: dict[tuple[str, str], dict] = {}
         self._log_sheet = None
         self._review_sheet = None
         self._flags_sheet = None
@@ -86,8 +93,28 @@ class PersistentCache:
             rows = self._log_sheet.get_all_records()
             for row in rows:
                 q = str(row.get("query", "")).strip().lower()
-                if q:
-                    self._log_counts[q] = self._log_counts.get(q, 0) + 1
+                if not q:
+                    continue
+                self._log_counts[q] = self._log_counts.get(q, 0) + 1
+
+                # Rebuild the NOVA cache from any log row that carries a
+                # llm_nova value. Later rows overwrite earlier ones so the
+                # cache reflects the most recent verdict per (code, query).
+                llm_nova = row.get("llm_nova", "")
+                if llm_nova not in ("", None):
+                    try:
+                        nova_int = int(llm_nova)
+                    except (ValueError, TypeError):
+                        continue
+                    code = str(row.get("bls302_code", "")).strip().upper()
+                    key = (code, q)
+                    agreed = row.get("llm_agreed", "")
+                    self._nova_cache[key] = {
+                        "nova": nova_int,
+                        "agree": str(agreed).lower() in ("true", "1", "yes"),
+                        "reason": str(row.get("llm_reason", "")),
+                        "method": str(row.get("llm_method", "")),
+                    }
         except Exception as e:
             print(f"PersistentCache load log error: {e}")
 
@@ -108,6 +135,17 @@ class PersistentCache:
         self._connect()
         return self._norm(query) in self._flagged_queries
 
+    def get_nova_cache(self, bls_code: str, query: str) -> dict | None:
+        """Return the most-recent cached LLM NOVA verdict for (code, query).
+
+        Returns None on miss. The lookup is in-memory (hydrated on load and
+        updated by log_search), so this is cheap to call per search.
+        """
+        self._connect()
+        key = ((bls_code or "").strip().upper(), self._norm(query))
+        cached = self._nova_cache.get(key)
+        return dict(cached) if cached else None
+
     def log_search(
         self,
         session_id: str,
@@ -120,6 +158,13 @@ class PersistentCache:
         bls40_name: str = "",
         bls40_source: str = "",
         bls40_conf: float = 0.0,
+        # NOVA verification fields. All optional — empty when Layer 3 wasn't
+        # run. Populated here to act as the cache for future runs.
+        rule_nova: int | None = None,
+        llm_nova: int | None = None,
+        llm_agreed: bool | None = None,
+        llm_method: str = "",
+        llm_reason: str = "",
     ):
         """Log one search, then promote to review_queue at REVIEW_THRESHOLD hits."""
         self._connect()
@@ -141,6 +186,11 @@ class PersistentCache:
             "bls40_name": bls40_name,
             "bls40_source": bls40_source,
             "bls40_conf": round(float(bls40_conf or 0), 3),
+            "rule_nova": "" if rule_nova is None else int(rule_nova),
+            "llm_nova": "" if llm_nova is None else int(llm_nova),
+            "llm_agreed": "" if llm_agreed is None else bool(llm_agreed),
+            "llm_method": llm_method or "",
+            "llm_reason": (llm_reason or "")[:500],
             "timestamp": now,
         }
         log_list = [log_row.get(c, "") for c in _LOG_COLUMNS]
@@ -158,6 +208,16 @@ class PersistentCache:
 
         count = self._log_counts.get(q_norm, 0) + 1
         self._log_counts[q_norm] = count
+
+        # Keep the in-memory NOVA cache in sync with what we just wrote.
+        if llm_nova is not None:
+            key = ((bls302_code or "").strip().upper(), q_norm)
+            self._nova_cache[key] = {
+                "nova": int(llm_nova),
+                "agree": bool(llm_agreed) if llm_agreed is not None else False,
+                "reason": llm_reason or "",
+                "method": llm_method or "",
+            }
 
         # Promote to review_queue only if not flagged
         if (count >= REVIEW_THRESHOLD
