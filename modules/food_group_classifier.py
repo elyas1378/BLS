@@ -77,11 +77,11 @@ def _classify_main_E(code: str) -> str:
 
 
 def _classify_main_H(code: str) -> str:
-    """H codes: mostly nuts, but H8xx can be plant milks (unfavorable/milk)."""
+    """H codes: nuts vs legumes vs plant-based alternatives."""
     if code.startswith("H84"):
-        return "11_Unfavorable_foods"  # plant milks — mapped as unfavorable in FIT
+        return "11_Unfavorable_foods"  # plant milks → 11.6 processed dairy alt
     if code.startswith("H86"):
-        return "13_Miscellaneous"  # soy products, tofu
+        return "2_Legumes"  # soy products, tofu (Excel Group 2)
     return "4_Nuts"
 
 
@@ -127,6 +127,57 @@ def _classify_sub_C(code: str) -> str:
         return "5_2_Starchy_sides"  # rice, corn
     return "5_1_Bread_cereals"
 
+
+
+# ═══════════════════════════════════════════════════════════
+#  Excel-scheme corrections (2026-04-21 Standardisierungsbeispiele)
+# ═══════════════════════════════════════════════════════════
+#
+# The Excel food-group scheme disagrees with many entries in food_group_map.py.
+# Rather than patch 3400 lookup rows, we apply pattern-based corrections after
+# the lookup so the classifier always routes these cases to the new scheme.
+#
+# Covered:
+#   - N2*, N3*              → 11_5_SSB   (Fruchtsaftgetränke, Limonaden, Colas,
+#                                         Saftschorle, Isotonic, Getränkepulver)
+#   - F code[4] == '7'      → 11_5_SSB   (Fruchtnektare — 7th-digit BLS encoding)
+#   - F code[4] == '6'      → 3_2_Juices_smoothies (pure fruit juices + smoothies)
+#   - M206*, M216*          → 11_5_SSB   (cocoa milk drinks)
+#   - H86*                  → 2_Legumes  (soy products, tofu — already in rule-H)
+
+_SSB = ("11_Unfavorable_foods", "11_5_SSB")
+_JUICES = ("3_Fruit", "3_2_Juices_smoothies")
+_SWEETS = ("11_Unfavorable_foods", "11_4_Sugar_confectionary")
+
+
+def _apply_excel_scheme_corrections(code: str, main: str | None, sub: str | None):
+    """Pattern-based overrides aligned with the 2026-04-21 Excel Food Groups sheet."""
+    # N2*/N3* — sweetened/mixed/soft drinks → SSB
+    if code[:2] in ("N2", "N3"):
+        return _SSB
+
+    # F-code 5th digit encodes preparation: 7=Nektar, 6=juice/smoothie
+    if code.startswith("F") and len(code) >= 5:
+        if code[4] == "7":
+            return _SSB
+        if code[4] == "6":
+            return _JUICES
+
+    # Cocoa milk drinks: M206* (Milcherzeugnis/Milchmischgetränk mit Kakao),
+    # M216* (Trinkmilch mit Kakao) → SSB (Excel 11.5 includes cocoa).
+    if code[:4] in ("M206", "M216"):
+        return _SSB
+
+    # Sweetened dairy products (chocolate yoghurt, Dickmilch mit Kakao, etc.)
+    # → 11_4_Sugar_confectionary per Excel 11.4 "sweetened milk-products".
+    if code[:4] in ("M226", "M236", "M246"):
+        return _SWEETS
+
+    # H86* — soy products, tofu → Legumes (Excel Group 2)
+    if code.startswith("H86"):
+        return "2_Legumes", "xx_none"
+
+    return main, sub
 
 
 # ═══════════════════════════════════════════════════════════
@@ -182,6 +233,16 @@ def classify(code: str, bls_version: str = "302",
             "N": _classify_sub_N, "P": _classify_sub_P, "Q": _classify_sub_Q,
         }.get(letter)
         sub = sub_fn(code) if sub_fn else LETTER_TO_SUB.get(letter)
+
+    # Apply Excel-scheme pattern corrections (SSBs, nectars, juices, cocoa, soy).
+    main, sub = _apply_excel_scheme_corrections(code, main, sub)
+
+    # Catch-all: codes that survived all rules without a main group (e.g. X/Y
+    # recipe codes not in the lookup) land in Miscellaneous per Sidney 2026-04-23.
+    if main is None:
+        main = "13_Miscellaneous"
+        if sub is None:
+            sub = "xx_none"
 
     # ── NOVA: Layer 1 (code structure) + Layer 2 (description overrides) ──
     nova_result = classify_nova(code, bls_version, food_desc or "", brand)

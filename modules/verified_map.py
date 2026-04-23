@@ -12,7 +12,7 @@ VERIFIED_MAP_302 = {
     "haferflocken": "C133000",
     "banane": "F503100",
     "vollkornbrot": "B101000",
-    "paprika": "G543100",
+    "paprika": "G540100",
     "gurke": "G520100",
     "tomate": "G561100",
     "kaffee mit milch": "N410200",
@@ -21,11 +21,11 @@ VERIFIED_MAP_302 = {
     "kaffee schwarz": "N410100",
     "tomaten": "G561100",
     "frischkäse": "M710000",
-    "zwiebel": "G483100",
+    "zwiebel": "G480122",
     "käse": "M400000",
     "milch": "M110300",
     "honig": "S120000",
-    "nüsse": "H210100",
+    "nüsse": "H100000",
     "rapsöl": "Q180000",
     "leinsamen": "H410100",
     "brot": "B251000",
@@ -41,7 +41,7 @@ VERIFIED_MAP_302 = {
     "mandarine": "F606000",
     "mozzarella": "M032100",
     "marmelade": "S135000",
-    "parmesan": "M306000",
+    "parmesan": "M306400",
     "walnüsse": "H120100",
     "birne": "F130100",
     "heidelbeeren": "F304100",
@@ -65,7 +65,7 @@ VERIFIED_MAP_302 = {
     "cocktailtomaten": "G561100",
     "reis gekocht": "C352032",
     "süßstoff": "S113000",
-    "cappuccino": "N414000",
+    "cappuccino": "N413900",
     "lachs": "T410000",
     "hafermilch": "H841100",
     "brokkoli": "G312022",
@@ -75,7 +75,7 @@ VERIFIED_MAP_302 = {
     "milch 3,5%": "M110300",
     "knäckebrot": "B600000",
     "roggenbrot": "B221000",
-    "knoblauch": "G490100",
+    "knoblauch": "G490122",
     "milch 1,5%": "M110200",
     "nudeln gekocht": "E401032",
     "mandelmilch": "H841100",
@@ -100,12 +100,12 @@ VERIFIED_MAP_302 = {
     "eier": "E111132",
     "salz, pfeffer": "R110000",
     "chiasamen": "H410100",
-    "champignons": "X511062",
+    "champignons": "K701022",
     "kiwi": "F514100",
-    "pommes": "X654112",
+    "pommes": "X654042",
     "hüttenkäse": "M711000",
     "himbeeren": "F302100",
-    "schinken": "W420100",
+    "schinken": "W424000",
     "haferdrink": "H841100",
     "gouda": "M402600",
     "joghurt 3,5%": "M141300",
@@ -114,7 +114,7 @@ VERIFIED_MAP_302 = {
     "kefir": "M130300",
     "schokolade": "S500000",
     "cola light": "N331000",
-    "rotwein": "P200000",
+    "rotwein": "P2A3000",
     "kürbiskerne": "H310100",
     "vollkorntoast": "B173000",
     "dinkelvollkornbrot": "B101000",
@@ -140,7 +140,7 @@ VERIFIED_MAP_302 = {
     "rucola": "G130100",
     "zitronensaft": "F601600",
     "kohlrabi": "G331100",
-    "camembert": "M602000",
+    "camembert": "M602600",
     "hanfsamen": "H410000",
     "mango": "F516100",
     "trauben": "F310100",
@@ -179,10 +179,10 @@ VERIFIED_MAP_302 = {
     "milch 3,8%": "M110300",
     "kloß": "K240500",
     "grüner tee": "N610100",
-    "spinat": "G210132",
+    "spinat": "G210122",
     "feldsalat": "G104100",
     "blumenkohl": "G311022",
-    "käsekuchen": "X931812",
+    "käsekuchen": "D480200",
     "kimchi": "G345000",
     "kondensmilch 4%": "M180300",
     "frühlingszwiebel": "G486100",
@@ -194,21 +194,20 @@ VERIFIED_MAP_302 = {
     "buttermilch": "M150000",
     "grapefruit": "F604100",
     "weizenbrötchen": "B501000",
-    "kartoffelsalat": "X280260",
+    "kartoffelsalat": "X280000",
     "vollkornknäckebrot": "B600000",
     "milch 1,8%-fett laktosefrei": "M114200",
     "lebkuchen": "D650500",
     "grüntee": "N610100",
     "putenbrust": "W561000",
     "möhren": "G620100",
-    "weißbrot": "B300000",
+    "weißbrot": "B311000",
     "aprikose": "F201100",
     "hähnchenbrust": "V416182",
     "cashews": "H170100",
     "erbsen": "G760022",
     "gemischter salat": "X201000",
     "speck": "U605600",
-    "gemischter salat": "X201000",
     "roggenbrötchen": "B521000",
     "plätzchen": "D700000",
     "kirschen": "F210100",
@@ -224,7 +223,7 @@ VERIFIED_MAP_302 = {
     "tomate rot": "G561100",
     "mandarinen": "F606000",
     "cashewkerne": "H170100",
-    "vollkornnudeln": "E500022",
+    "vollkornnudeln": "E500032",
     "apfelmus": "Y843143",
     "spitzpaprika": "G543100",
     "zitrone": "F601000",
@@ -243,12 +242,11 @@ VERIFIED_MAP_302 = {
     "rote paprika": "G543100",
     "buchweizen": "C320000",
     "ajvar": "G919900",
-    "cola zero": "N331000",
     "bier alkoholfrei": "P110000",
     "körnerbrot": "B291000",
     "hähnchenbrustfilet": "V416182",
     "walnuss": "H120100",
-    "süßkartoffel": "K420000",
+    "süßkartoffel": "K420122",
     "studentenfutter": "H810000",
     "leberkäse": "W256100",
     "kakaonibs": "S710000",
@@ -267,7 +265,7 @@ VERIFIED_MAP_302 = {
     "garnelen": "T753222",
     "erdbeere": "F301100",
     "kräuterbutter": "Y790140",
-    "kuchen": "D410000",
+    "kuchen": "D400000",
     "salzkartoffeln": "K100022",
     "wasser mit sirup": "N015000",
     "aubergine": "G510122",
@@ -281,7 +279,7 @@ VERIFIED_MAP_302 = {
     "proteinriegel": "S820100",
     "soße": "X300003",
     "sojasoße": "H840100",
-    "rotkohl": "G341100",
+    "rotkohl": "G341122",
     "milch 3,8 % fett": "M110300",
     "sojadrink": "H841100",
     "spaghetti": "E401032",
@@ -292,14 +290,14 @@ VERIFIED_MAP_302 = {
     "cranberrysaft": "F212600",
     "wienerle": "W211200",
     "schwarzer tee": "N630000",
-    "obst": "F000100",
+    "obst": "F000000",
     "milch 1.5 %": "M110200",
     "milch laktosefrei": "M114300",
     "weißweinschorle": "P285000",
     "halloumi": "M524500",
     "breze": "B723000",
-    "schwarzbrot": "B101000",
-    "saft": "F110600",
+    "schwarzbrot": "B122000",
+    "saft": "F000600",
     "kartoffeln gekocht": "K100022",
     "cocktailtomate": "G561100",
     "erbsenproteinpulver": "E103500",
@@ -310,12 +308,12 @@ VERIFIED_MAP_302 = {
     "gewürze": "R200000",
     "blauschimmelkäse": "M513700",
     "nussmischung": "H100000",
-    "eis": "S240000",
+    "eis": "S200000",
     "gnocchi": "K270032",
     "naturjoghurt": "M141200",
     "ei gekocht": "E111132",
     "lachsfilet": "T410000",
-    "spargel": "G450022",
+    "spargel": "G450122",
     "bergkäse": "M302600",
     "roggenknäckebrot": "B621000",
     "leinsamen geschrotet": "H410100",
@@ -329,7 +327,7 @@ VERIFIED_MAP_302 = {
     "gurkensalat": "X201840",
     "nüsse gemischt": "H100000",
     "mandelmilch ungezuckert": "H841100",
-    "döner": "Y921162",
+    "döner": "Y921062",
     "pizza": "X912000",
     "cheddar": "M314700",
     "chips": "K280100",
@@ -348,7 +346,7 @@ VERIFIED_MAP_302 = {
     "datteltomaten": "G561100",
     "fladenbrot": "B782000",
     "rote zwiebel": "G483100",
-    "hackfleisch": "U050100",
+    "hackfleisch": "U050182",
     "dinkelbrot": "B710500",
     "wasser / tee": "N110000",
     "vollkornnudeln roh": "E500000",
@@ -356,7 +354,7 @@ VERIFIED_MAP_302 = {
     "bier alkoholfrei jever": "P110000",
     "laugenbrötchen": "B722000",
     "kürbiskern": "H310100",
-    "rosenkohl": "G332100",
+    "rosenkohl": "G332022",
     "stremellachs": "T410000",
     "chinakohl": "G321100",
     "prosecco": "P321000",
@@ -370,13 +368,13 @@ VERIFIED_MAP_302 = {
     "eier gekocht": "E111132",
     "getreidekaffee": "N500100",
     "gelbwurst": "W241000",
-    "kräuter": "G060000",
+    "kräuter": "G088000",
     "krautsalat mit essig-öl-dressing": "X238110",
     "plattpfirsich": "F203100",
     "brokkoli gekocht": "G312022",
     "graubrot": "B201000",
     "walnussöl": "Q310000",
-    "sauerteigbrot": "B201000",
+    "sauerteigbrot": "B251000",
     "krautsalat": "X238110",
     "frischkäse balance buko": "M710000",
     "gyros": "Y384112",
@@ -477,10 +475,9 @@ VERIFIED_MAP_302 = {
     "bierschinken": "W273100",
     "salatgurke gurke": "G520100",
     "salat gemischt": "X201000",
-    "rindfleisch": "U100100",
+    "rindfleisch": "U100022",
     "rindersalami": "W140000",
     "laugenbrezel": "B723000",
-    "körniger frischkäse": "M711000",
     "bohnen": "G710022",
     "bolognese": "Y038213",
     "kürbiskernöl": "Q250000",
@@ -497,7 +494,7 @@ VERIFIED_MAP_302 = {
     "spekulatius": "D730600",
     "käse gouda": "M402600",
     "tk himbeeren": "F302200",
-    "kräuterquark": "M837500",
+    "kräuterquark": "M8A2000",
     "essig-öl-dressing": "X351012",
     "flohsamenschalen": "H410500",
     "weißkohl": "G342122",
@@ -557,7 +554,7 @@ VERIFIED_MAP_302 = {
     "chicoree": "G101100",
     "kurkuma": "R212000",
     "proteinpulver": "E103500",
-    "lauch": "G470022",
+    "lauch": "G486132",
     "röstzwiebeln": "G480162",
     "pute": "V486182",
     "quark 20%-fett": "M713300",
@@ -575,7 +572,6 @@ VERIFIED_MAP_302 = {
     "kartoffelsuppe": "X449713",
     "bier alkoholfrei jever fun": "P110000",
     "schokoladenkuchen": "D433300",
-    "creme fraiche": "M176800",
     "plattpfirsiche": "F203100",
     "johannisbeeren": "F320000",
     "brötchen mit sonnenblumenkernen": "B506500",
@@ -583,19 +579,18 @@ VERIFIED_MAP_302 = {
     "gebäck": "D780100",
     "eiskaffee": "Y997043",
     "frischkäse 15%": "M710000",
-    "rote beete": "G613100",
     "gemüseeintopf": "X447043",
     "geflügelsalami": "W147000",
     "gelbe paprika": "G540100",
     "fleischküchle": "Y036612",
-    "frikadelle": "Y036132",
+    "frikadelle": "U051182",
     "frischkäse 0,2%": "M820100",
     "zwetschgenkuchen": "D100000",
     "zitronen-ingwer tee": "N600100",
     "ziegenfrischkäse": "M710000",
     "zartbitterschokolade": "S560000",
     "gekochte eier": "E111132",
-    "braune soße": "X330053",
+    "braune soße": "X330043",
     "baked oatmeal": "X454713",
     "alkoholfreies weizen bier": "P110000",
     "brötchen weiß": "B501000",
@@ -681,7 +676,6 @@ VERIFIED_MAP_302 = {
     "espresso doppelt": "N411100",
     "kernige haferflocken": "C133000",
     "hartgekochtes ei": "E111132",
-    "braune soße": "X330053",
     "matcha latte": "N720200",
     "mandelmilch ungesüßt": "H841100",
     "mentos": "S460000",
@@ -689,7 +683,6 @@ VERIFIED_MAP_302 = {
     "gouda 45%": "M402600",
     "apfelmark": "Y864112",
     "wildheidelbeeren": "F304100",
-    "grüner tee": "N610100",
     "gurkensalat mit essig-öldressing": "X201840",
     "gummibärchen haribo": "S440000",
     "ayran": "M2S8300",
@@ -716,4 +709,93 @@ VERIFIED_MAP_302 = {
     "riesen": "S560800",
     "bowl mit gemüse, salat, feta, fleischersatz und öl-dressing": "X1A3000",
     "gemüsecurry": "X880233",
+
+    # ── Standardisierungsliste additions (2026-04-21, Sidney) ──
+    "proteinbrot": "B107800",  # Vollkornbrot mit Milcheiweiß
+    "glutenfreies brot": "B214000",  # Körnerbrot glutenfrei
+    "toastbrot": "B314000",  # Weißbrot-Weizentoastbrot
+    "vollkorntoastbrot": "B163000",  # Vollkornbrot-Weizen/Roggenvollkornschrottoastbrot
+    "müsli": "C512100",  # Müsli
+    "knuspermüsli / crunchy": "C512500",  # Knusper-Müsli angereichert mit 7 Vitaminen und Calcium
+    "cornflakes": "C515000",  # Cornflakes
+    "bircher müsli": "X092060",  # Birchermüesli mit Äpfeln und Schlagsahne (6)
+    "bircher müsli mischung": "C512300",  # Früchte-Müsli
+    "quinoa": "C118032",  # Quinoa weiß gekocht
+    "torte": "D300000",  # Torten
+    "zwieback": "D030000",  # Zwieback
+    "keks": "D700000",  # Plätzchen Kekse
+    "schokokeks": "X920112",  # Schokoladenkeks
+    "muffin": "D400800",  # Muffins mit Heidelbeeren
+    "plundergebäck": "D780100",  # Plundergebäck
+    "blechkuchen": "D430000",  # Kuchen aus Rührmasse
+    "obstkuchen": "D100000",  # Obstkuchen (allgemein)
+    "sahnetorte": "D300100",  # Cremetorte
+    "ei (zubereitung nicht spezifiziert)": "E111132",  # Hühnerei Vollei gekocht
+    "tk-obst": "F090200",  # Obstmischung tiefgefroren
+    "beeren": "F300000",  # Beerenobst
+    "schorle": "N256000",  # Apfelsaftschorle
+    "tk-gemüse": "G090222",  # Gemüsemischung tiefgefroren gegart
+    "gemüsepfanne": "X518233",  # Gemüsepfanne
+    "salat grün": "G105100",  # Kopfsalat roh
+    "saure gurke": "G890702",  # Gewürzgurken Sauerkonserve, abgetropft
+    "gemüsesaft": "G090600",  # Gemüsemischung Saft
+    "samen": "H400000",  # Ölsamen
+    "sojajoghurt": "H844000",  # Biologische pflanzliche Soja-Joghurtalternative
+    "sojajoghurt mit fruchtmischung oder anderem geschmack": "H844300",  # Sojajoghurt Erdbeergeschmack angereichert mit Calcium und Vitaminen probiotisch
+    "mandeldrink": "H841100",  # Sojadrink flüssig
+    "reisdrink": "H841100",  # Sojadrink flüssig
+    "kloß / knödel": "K240500",  # Kartoffelkloß gekocht Trockenprodukt
+    "fruchtjoghurt": "M242200",  # Joghurt 1,5% Fett mit Fruchtzubereitung
+    "früchtequark": "M8C4300",  # Quark mit Fruchtzubereitung mind. 20% Fett i. Tr.
+    "sekt alkoholfrei": "N005000",  # Sekt alkoholfrei
+    "radler alkoholfrei": "P110000",  # Bier alkoholfrei (<0,5Gew% Alkohol)
+    "cocktail": "P900000",  # Cocktails
+    "likör": "P500000",  # Liköre
+    "schnaps": "P520000",  # Fruchtbrandy
+    "kräuter frisch": "G088100",  # Kräutermischung frisch
+    "schokoladen-riegel": "S582600",  # Schoko-Riegel gefüllt mit Milchcreme
+    "fisch": "T000022",  # Fische gegart
+    "meeresfrüchte": "T753182",  # Garnele gebraten (zubereitet ohne Fett)
+    "schweinefleisch": "U500022",  # Schwein Fleisch gegart
+    "hühnchenbrust": "V416182",  # Brathähnchen Brustfilet gebraten (zubereitet ohne Fett)
+    "burgerpatty": "Y033132",  # Hamburger Beefsteak (3)
+    "würstchen": "W211000",  # Würstchen/Bockwurst/Wiener Würstchen
+    "leber": "V533182",  # Schwein Leber gebraten (zubereitet ohne Fett)
+    "rindfleisch mager": "U101122",  # Rind Fleisch (ma) gegart
+    "schweinefleisch mager": "U501122",  # Schwein Fleisch (ma) gegart
+    "schinken mager": "U681800",  # Schwein Keule (Schinken) (ma) gepökelt ungeräuchert
+    "salatdressing": "X351012",  # Essig-Öl-Dressing
+    "flammkuchen": "X934412",  # Flammkuchen
+    "grießbrei": "X951113",  # Grießbrei (1)
+    "milchreis": "X810113",  # Milchreis mit Butter Zucker und Zimt (1)
+    "gemüsereis": "X880233",  # Gemüsereis (bunter Reis) (3)
+    "tomatenreis": "X880332",  # Tomatenreis (3)
+    "sushi": "Y627112",  # Sushi
+    "wurstsalat": "X290000",  # Wurstsalate (0)
+    "tomatensauce": "X321813",  # Tomatensoße (Standardrezeptur)
+    "tomatensuppe": "X446513",  # Tomatensuppe (Standardrezeptur)
+    "burger": "Y911060",  # Hamburger (6)
+    "fruchtgrütze": "Y851363",  # Fruchtgrütze (6)
+    "pudding": "Y807012",  # Schokoladenpudding vollfett
+    "kohl": "G300000",  # Kohlgemüse
+
+    # ── Vegetable prep-state mappings (2026-04-21, Sidney) ──
+    "mangold": "G230122",
+    "bleichsellerie": "G220100",
+    "romanesco": "G350122",
+    "spitzkohl": "G344000",
+    "wirsing": "G343022",
+    "grünkohl": "G322122",
+    "hokkaido": "G581122",
+    "bohne grün": "G710022",
+    "erbse grün": "G760022",
+    "zuckererbse": "G761000",
+    "knollensellerie": "G660122",
+    "pastinake": "G640022",
+    "rettich": "G680100",
+    "rote bete": "G613022",
+    "schwarzwurzel": "G650022",
+    "pilze": "K700022",
+    "artischocke": "G410022",
+    "schalotte": "G485100",
 }
